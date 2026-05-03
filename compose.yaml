@@ -1,0 +1,64 @@
+# Local development infrastructure for Kliniq.
+# Bring up:    docker compose up -d
+# Tear down:   docker compose down
+# Reset data:  docker compose down -v   (drops postgres volume)
+#
+# Services:
+#   postgres  → 5432 (db: kliniq, user: kliniq, password: kliniq_dev_only)
+#   redis     → 6379
+#   mailpit   → 1025 (SMTP) + 8025 (web UI at http://localhost:8025)
+
+name: kliniq-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kliniq-pg
+    environment:
+      POSTGRES_DB: kliniq
+      POSTGRES_USER: kliniq
+      POSTGRES_PASSWORD: kliniq_dev_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kliniq -d kliniq"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - kliniq-net
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: kliniq-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - kliniq-net
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: kliniq-mailpit
+    ports:
+      - "1025:1025"   # SMTP — used by the API in dev
+      - "8025:8025"   # Web UI — open in browser to read mail
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    networks:
+      - kliniq-net
+
+volumes:
+  pg-data:
+
+networks:
+  kliniq-net:
