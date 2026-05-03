@@ -1,0 +1,13 @@
+# gitleaks configuration. Extends the default ruleset.
+# Docs: https://github.com/gitleaks/gitleaks
+
+[extend]
+useDefault = true
+
+# Files allowed to contain placeholder-like strings without flagging.
+[allowlist]
+description = "Local env templates only — real secrets must never be committed."
+paths = [
+    '''^\.env\.example$''',
+    '''^docs/.*\.md$''',
+]
