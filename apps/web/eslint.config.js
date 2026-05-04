@@ -37,8 +37,12 @@ export default defineConfig(
 		}
 	},
 	{
-		// Override or add rule settings here, such as:
-		// 'svelte/button-has-type': 'error'
-		rules: {}
+		rules: {
+			// We use plain string paths and let SvelteKit's router match them.
+			// `resolve()`-based paths give type-safety with codegen but add
+			// boilerplate without adding correctness — every internal link
+			// goes through Vite's dev server, broken paths surface immediately.
+			'svelte/no-navigation-without-resolve': 'off'
+		}
 	}
 );
