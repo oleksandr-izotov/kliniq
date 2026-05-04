@@ -9,6 +9,7 @@ import com.kliniq.domain.user.User
 import com.kliniq.domain.user.UserStatus
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
+import java.time.OffsetDateTime
 import java.util.UUID
 
 @Repository
@@ -53,6 +54,20 @@ class JooqUserRepository(
                 .from(USERS)
                 .where(USERS.EMAIL_NORMALIZED.eq(email.lowercase())),
         )
+
+    override fun markEmailVerified(
+        id: UUID,
+        verifiedAt: OffsetDateTime,
+    ): Boolean {
+        val updated =
+            dsl
+                .update(USERS)
+                .set(USERS.EMAIL_VERIFIED_AT, verifiedAt)
+                .where(USERS.ID.eq(id))
+                .and(USERS.EMAIL_VERIFIED_AT.isNull)
+                .execute()
+        return updated == 1
+    }
 }
 
 private fun UsersRecord.toDomain(): User =

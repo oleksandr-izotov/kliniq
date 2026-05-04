@@ -1,8 +1,14 @@
 package com.kliniq.api.auth
 
+import com.kliniq.domain.user.Role
+import com.kliniq.domain.user.Specialty
+import com.kliniq.domain.user.User
+import com.kliniq.domain.user.UserStatus
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import java.time.OffsetDateTime
+import java.util.UUID
 
 data class RegisterRequest(
     @field:NotBlank
@@ -24,6 +30,54 @@ data class RegisterRequest(
     }
 }
 
-data class RegisterResponse(
+data class LoginRequest(
+    @field:NotBlank
+    @field:Email
+    @field:Size(max = RegisterRequest.MAX_EMAIL)
+    val email: String,
+    @field:NotBlank
+    @field:Size(min = RegisterRequest.MIN_PASSWORD, max = RegisterRequest.MAX_PASSWORD)
+    val password: String,
+)
+
+data class VerifyRequest(
+    @field:NotBlank
+    @field:Size(min = 1, max = MAX_TOKEN)
+    val token: String,
+) {
+    companion object {
+        const val MAX_TOKEN = 100 // 32 bytes base64url-encoded fits in 43 chars; cap is a sanity bound
+    }
+}
+
+data class MessageResponse(
     val message: String,
 )
+
+/** Shape returned by /login (success), /me, and /verify when we want to echo the user. */
+data class UserResponse(
+    val id: UUID,
+    val email: String,
+    val displayName: String,
+    val role: Role,
+    val isSurgeon: Boolean,
+    val specialty: Specialty?,
+    val status: UserStatus,
+    val emailVerifiedAt: OffsetDateTime?,
+    val createdAt: OffsetDateTime,
+) {
+    companion object {
+        fun of(user: User): UserResponse =
+            UserResponse(
+                id = user.id,
+                email = user.email,
+                displayName = user.displayName,
+                role = user.role,
+                isSurgeon = user.isSurgeon,
+                specialty = user.specialty,
+                status = user.status,
+                emailVerifiedAt = user.emailVerifiedAt,
+                createdAt = user.createdAt,
+            )
+    }
+}
