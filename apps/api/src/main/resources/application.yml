@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: kliniq-api
+  profiles:
+    # If no profile is selected, default to "local" (dev). Override on prod with
+    # SPRING_PROFILES_ACTIVE=prod or --spring.profiles.active=prod.
+    default: local
+  # We manage docker compose lifecycle ourselves (`docker compose up -d`).
+  # Spring Boot's auto-managed compose support would otherwise discover
+  # compose.yaml at the working dir and override our explicit datasource
+  # credentials with values it derives from the running services.
+  docker:
+    compose:
+      enabled: false
+  jackson:
+    default-property-inclusion: non_null
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8443
+  error:
+    include-message: never
+    include-binding-errors: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: never
+  info:
+    env:
+      enabled: false
+    git:
+      enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.kliniq: DEBUG
+    org.springframework.security: INFO

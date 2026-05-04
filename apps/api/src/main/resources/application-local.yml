@@ -1,0 +1,32 @@
+server:
+  port: 8443
+  ssl:
+    enabled: true
+    key-store: file:certs/localhost.p12
+    key-store-password: changeit
+    key-store-type: PKCS12
+    key-alias: kliniq-api
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:55432/kliniq
+    username: kliniq
+    password: kliniq_dev_only
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 5000
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 3000ms
+  session:
+    store-type: redis
+    timeout: 30d
+    redis:
+      namespace: "kliniq:session"
+
+logging:
+  level:
+    org.springframework.web: INFO
+    org.flywaydb: INFO

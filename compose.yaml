@@ -18,8 +18,11 @@ services:
       POSTGRES_DB: kliniq
       POSTGRES_USER: kliniq
       POSTGRES_PASSWORD: kliniq_dev_only
+    # Host port 55432 (not 5432) to avoid clashing with a native PostgreSQL
+    # service running on Windows. Inside the container, postgres still listens
+    # on 5432.
     ports:
-      - "5432:5432"
+      - "55432:5432"
     volumes:
       - pg-data:/var/lib/postgresql/data
     healthcheck:
