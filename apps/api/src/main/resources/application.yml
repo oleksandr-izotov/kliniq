@@ -18,6 +18,14 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+# App-specific knobs grouped under `app.*` so they're not confused with
+# Spring's own config.
+app:
+  web:
+    base-url: https://localhost:5173
+  mail:
+    from: "no-reply@kliniq.local"
+
 server:
   port: 8443
   error:

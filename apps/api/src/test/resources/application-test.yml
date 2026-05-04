@@ -24,6 +24,15 @@ spring:
     timeout: 30m
     redis:
       namespace: "kliniq:session:test"
+  # JavaMailSender auto-config needs a host to register the bean. The actual
+  # sending is intercepted by @MockitoBean(EmailSender::class) in tests, so
+  # this address is never contacted.
+  mail:
+    host: localhost
+    port: 1025
+    properties:
+      mail.smtp.auth: false
+      mail.smtp.starttls.enable: false
 
 logging:
   level:
