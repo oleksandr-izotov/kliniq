@@ -7,12 +7,38 @@ pre-commit:
   commands:
     gitleaks:
       run: gitleaks protect --staged --redact --no-banner
-    # Frontend / Kotlin lint commands will be added in Sprint 0 Day 3 / Day 4
-    # once the apps/web and apps/api skeletons exist.
+
+    # Frontend lint & format on staged files. `root:` strips that prefix from
+    # {staged_files} so paths line up with the working directory.
+    web-eslint:
+      root: apps/web
+      glob: "*.{js,ts,svelte}"
+      run: pnpm exec eslint {staged_files}
+    web-prettier:
+      root: apps/web
+      glob: "*.{js,ts,svelte,css,html,md,json}"
+      run: pnpm exec prettier --check {staged_files}
+
+    # Backend lint runs the project task — ktlint discovers files itself, so
+    # we don't need to forward {staged_files}.
+    api-ktlint:
+      root: apps/api
+      glob: "*.{kt,kts}"
+      run: ./gradlew ktlintCheck --quiet
 
 commit-msg:
   commands:
     commitlint:
       run: pnpm exec commitlint --edit {1}
 
-# pre-push hooks for typecheck + tests will be added once apps exist.
+# Heavier checks before remote push: full typecheck + lint pass on each app.
+# Tests themselves run in CI (they need postgres + redis containers).
+pre-push:
+  parallel: true
+  commands:
+    web-svelte-check:
+      root: apps/web
+      run: pnpm exec svelte-check --threshold error
+    api-detekt:
+      root: apps/api
+      run: ./gradlew detekt --quiet

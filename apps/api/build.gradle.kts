@@ -4,7 +4,7 @@ plugins {
     id("org.springframework.boot") version "3.5.10"
     id("io.spring.dependency-management") version "1.1.7"
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
-    id("io.gitlab.arturbosch.detekt") version "1.23.7"
+    id("io.gitlab.arturbosch.detekt") version "1.23.8"
 }
 
 group = "com.kliniq"
@@ -79,4 +79,16 @@ detekt {
     buildUponDefaultConfig = true
     allRules = false
     autoCorrect = false
+}
+
+// detekt 1.23.x ships with Kotlin 2.0.x bundled and refuses to run when the
+// project Kotlin compiler is newer. Force its internal dependencies onto the
+// version detekt was compiled against — official workaround per
+// https://detekt.dev/docs/gettingstarted/gradle#dependencies until detekt 2.x.
+configurations.matching { it.name == "detekt" }.all {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.kotlin") {
+            useVersion("2.0.21")
+        }
+    }
 }

@@ -18,8 +18,7 @@ class SecurityConfig {
             .authorizeHttpRequests {
                 it.requestMatchers(EndpointRequest.to("health", "info")).permitAll()
                 it.anyRequest().authenticated()
-            }
-            .csrf { it.disable() }
+            }.csrf { it.disable() }
             .formLogin { it.disable() }
             .httpBasic { it.disable() }
             .build()

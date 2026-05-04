@@ -1,0 +1,151 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel in-progress runs on the same ref when a new commit lands.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Backend (Kotlin + Spring Boot) — JUnit + Spring context load against real
+  # postgres and redis containers. Uses the `test` profile defined in
+  # apps/api/src/test/resources/application-test.yml.
+  # ---------------------------------------------------------------------------
+  api:
+    name: api · build & test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: kliniq
+          POSTGRES_USER: kliniq
+          POSTGRES_PASSWORD: kliniq_dev_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kliniq -d kliniq"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7.4-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Lint (ktlint)
+        working-directory: apps/api
+        run: ./gradlew ktlintCheck
+
+      - name: Static analysis (detekt)
+        working-directory: apps/api
+        run: ./gradlew detekt
+
+      - name: Test
+        working-directory: apps/api
+        run: ./gradlew test
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-reports
+          path: apps/api/build/reports/tests/test
+
+  # ---------------------------------------------------------------------------
+  # Frontend (SvelteKit + TypeScript) — lint, typecheck, unit tests.
+  # E2E (playwright) is not run in CI yet; deferred until V1 has real flows.
+  # ---------------------------------------------------------------------------
+  web:
+    name: web · lint, typecheck, unit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (eslint + prettier)
+        working-directory: apps/web
+        run: pnpm run lint
+
+      - name: Typecheck (svelte-check)
+        working-directory: apps/web
+        run: pnpm run check
+
+      - name: Unit tests (vitest)
+        working-directory: apps/web
+        run: pnpm exec vitest run
+
+  # ---------------------------------------------------------------------------
+  # Secrets — gitleaks scans the repo on every push and PR.
+  # ---------------------------------------------------------------------------
+  gitleaks:
+    name: gitleaks · secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  # ---------------------------------------------------------------------------
+  # Conventional Commits — only runs on PRs (commit messages of pushed branches
+  # have already been merged historically and aren't worth re-validating).
+  # ---------------------------------------------------------------------------
+  commitlint:
+    name: commitlint · PR commit messages
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validate commit messages
+        run: |
+          pnpm exec commitlint \
+            --from "${{ github.event.pull_request.base.sha }}" \
+            --to "${{ github.event.pull_request.head.sha }}"

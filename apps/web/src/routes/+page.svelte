@@ -30,21 +30,21 @@
 	<title>Kliniq · Sprint 0</title>
 </svelte:head>
 
-<main class="bg-background text-foreground flex min-h-screen items-center justify-center p-6">
+<main class="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
 	<div class="w-full max-w-md space-y-6 text-center">
 		<header class="space-y-2">
-			<h1 class="text-primary text-5xl font-bold tracking-tight">kliniq</h1>
-			<p class="text-muted-foreground text-sm">Sprint 0 · frontend ↔ api boot test</p>
+			<h1 class="text-5xl font-bold tracking-tight text-primary">kliniq</h1>
+			<p class="text-sm text-muted-foreground">Sprint 0 · frontend ↔ api boot test</p>
 		</header>
 
-		<section class="bg-card border-border rounded-lg border p-6 text-left shadow-sm">
-			<div class="text-muted-foreground mb-2 text-xs uppercase tracking-wide">api health</div>
+		<section class="rounded-lg border border-border bg-card p-6 text-left shadow-sm">
+			<div class="mb-2 text-xs tracking-wide text-muted-foreground uppercase">api health</div>
 			{#if loading}
-				<p class="text-muted-foreground text-sm">checking…</p>
+				<p class="text-sm text-muted-foreground">checking…</p>
 			{:else if error}
-				<p class="text-destructive text-sm">error: {error}</p>
+				<p class="text-sm text-destructive">error: {error}</p>
 			{:else}
-				<pre class="bg-muted text-foreground overflow-x-auto rounded p-3 text-sm">{JSON.stringify(
+				<pre class="overflow-x-auto rounded bg-muted p-3 text-sm text-foreground">{JSON.stringify(
 						health,
 						null,
 						2
@@ -54,7 +54,7 @@
 
 		<button
 			onclick={checkHealth}
-			class="bg-primary text-primary-foreground hover:bg-primary/90 ring-ring focus-visible:ring-ring inline-flex h-10 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+			class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground ring-ring transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
 			disabled={loading}
 		>
 			recheck

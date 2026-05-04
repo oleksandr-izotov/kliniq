@@ -1,0 +1,53 @@
+version: 2
+updates:
+  # Frontend (npm via pnpm-workspace).
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      svelte:
+        patterns: ["@sveltejs/*", "svelte", "svelte-*"]
+      tailwind:
+        patterns: ["tailwindcss", "@tailwindcss/*", "tw-*", "prettier-plugin-tailwindcss"]
+      lint-and-format:
+        patterns: ["eslint*", "@eslint/*", "prettier*", "typescript-eslint", "globals"]
+      testing:
+        patterns: ["vitest", "@vitest/*", "@playwright/*", "playwright"]
+      types:
+        patterns: ["@types/*"]
+
+  # Backend (Gradle + Maven Central).
+  - package-ecosystem: gradle
+    directory: "/apps/api"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      spring:
+        patterns: ["org.springframework*", "io.spring*"]
+      kotlin:
+        patterns: ["org.jetbrains.kotlin*", "kotlin*"]
+      flyway:
+        patterns: ["org.flywaydb*"]
+      testing:
+        patterns: ["org.junit*", "org.testcontainers*", "*test*"]
+
+  # GitHub Actions used in our CI workflow.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"
