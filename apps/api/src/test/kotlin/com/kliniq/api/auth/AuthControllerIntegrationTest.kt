@@ -25,6 +25,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
@@ -120,12 +121,14 @@ class AuthControllerIntegrationTest
         ) {
             mockMvc
                 .post("/api/v1/auth/register") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = registerBody(email, password, displayName)
                 }.andExpect { status { isOk() } }
             val token = captureIssuedToken()
             mockMvc
                 .post("/api/v1/auth/verify") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = verifyBody(token)
                 }.andExpect { status { isOk() } }
@@ -137,6 +140,7 @@ class AuthControllerIntegrationTest
         fun `register creates a user and dispatches a verification email`() {
             mockMvc
                 .post("/api/v1/auth/register") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = registerBody(email = "alice@kliniq.local", displayName = "Alice")
                 }.andExpect {
@@ -166,12 +170,14 @@ class AuthControllerIntegrationTest
 
             mockMvc
                 .post("/api/v1/auth/register") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = body
                 }.andExpect { status { isOk() } }
 
             mockMvc
                 .post("/api/v1/auth/register") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = body
                 }.andExpect { status { isOk() } }
@@ -190,6 +196,7 @@ class AuthControllerIntegrationTest
         fun `register with too-short password returns 400 with VALIDATION_ERROR`() {
             mockMvc
                 .post("/api/v1/auth/register") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = registerBody(email = "carol@kliniq.local", password = "short")
                 }.andExpect {
@@ -206,6 +213,7 @@ class AuthControllerIntegrationTest
         fun `verify happy path stamps email_verified_at`() {
             mockMvc
                 .post("/api/v1/auth/register") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = registerBody(email = "dave@kliniq.local", displayName = "Dave")
                 }.andExpect { status { isOk() } }
@@ -213,6 +221,7 @@ class AuthControllerIntegrationTest
 
             mockMvc
                 .post("/api/v1/auth/verify") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = verifyBody(token)
                 }.andExpect {
@@ -233,6 +242,7 @@ class AuthControllerIntegrationTest
         fun `verify with bogus token returns 400 INVALID_TOKEN`() {
             mockMvc
                 .post("/api/v1/auth/verify") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = verifyBody("not-a-real-token")
                 }.andExpect {
@@ -250,6 +260,7 @@ class AuthControllerIntegrationTest
             val result =
                 mockMvc
                     .post("/api/v1/auth/login") {
+                        with(csrf())
                         contentType = MediaType.APPLICATION_JSON
                         content = loginBody("eve@kliniq.local", DEFAULT_PASSWORD)
                     }.andExpect {
@@ -270,6 +281,7 @@ class AuthControllerIntegrationTest
 
             mockMvc
                 .post("/api/v1/auth/login") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = loginBody("frank@kliniq.local", "wrong horse battery staple")
                 }.andExpect {
@@ -282,6 +294,7 @@ class AuthControllerIntegrationTest
         fun `login with unknown email also returns 401 INVALID_CREDENTIALS`() {
             mockMvc
                 .post("/api/v1/auth/login") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = loginBody("ghost@nowhere.local", DEFAULT_PASSWORD)
                 }.andExpect {
@@ -295,12 +308,14 @@ class AuthControllerIntegrationTest
             // Register but skip verify.
             mockMvc
                 .post("/api/v1/auth/register") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = registerBody(email = "grace@kliniq.local")
                 }.andExpect { status { isOk() } }
 
             mockMvc
                 .post("/api/v1/auth/login") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = loginBody("grace@kliniq.local", DEFAULT_PASSWORD)
                 }.andExpect {
@@ -327,6 +342,7 @@ class AuthControllerIntegrationTest
             val loginResult =
                 mockMvc
                     .post("/api/v1/auth/login") {
+                        with(csrf())
                         contentType = MediaType.APPLICATION_JSON
                         content = loginBody("henry@kliniq.local", DEFAULT_PASSWORD)
                     }.andExpect { status { isOk() } }
@@ -346,6 +362,7 @@ class AuthControllerIntegrationTest
             // Logout invalidates session
             mockMvc
                 .post("/api/v1/auth/logout") {
+                    with(csrf())
                     cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, cookieValue))
                 }.andExpect {
                     status { isOk() }
@@ -369,6 +386,7 @@ class AuthControllerIntegrationTest
 
             mockMvc
                 .post("/api/v1/auth/password/forgot") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = forgotBody("ivan@kliniq.local")
                 }.andExpect { status { isOk() } }
@@ -384,6 +402,7 @@ class AuthControllerIntegrationTest
         fun `forgot-password returns neutral when user does not exist`() {
             mockMvc
                 .post("/api/v1/auth/password/forgot") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = forgotBody("ghost@nowhere.local")
                 }.andExpect { status { isOk() } }
@@ -396,6 +415,7 @@ class AuthControllerIntegrationTest
             // Register without verify.
             mockMvc
                 .post("/api/v1/auth/register") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = registerBody(email = "jenny@kliniq.local")
                 }.andExpect { status { isOk() } }
@@ -403,6 +423,7 @@ class AuthControllerIntegrationTest
 
             mockMvc
                 .post("/api/v1/auth/password/forgot") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = forgotBody("jenny@kliniq.local")
                 }.andExpect { status { isOk() } }
@@ -418,6 +439,7 @@ class AuthControllerIntegrationTest
             val loginResult =
                 mockMvc
                     .post("/api/v1/auth/login") {
+                        with(csrf())
                         contentType = MediaType.APPLICATION_JSON
                         content = loginBody("kate@kliniq.local", DEFAULT_PASSWORD)
                     }.andExpect { status { isOk() } }
@@ -428,6 +450,7 @@ class AuthControllerIntegrationTest
             Mockito.reset(emailSender)
             mockMvc
                 .post("/api/v1/auth/password/forgot") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = forgotBody("kate@kliniq.local")
                 }.andExpect { status { isOk() } }
@@ -436,6 +459,7 @@ class AuthControllerIntegrationTest
             // Reset.
             mockMvc
                 .post("/api/v1/auth/password/reset") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = resetBody(resetToken, "new horse battery staple xyz")
                 }.andExpect { status { isOk() } }
@@ -449,6 +473,7 @@ class AuthControllerIntegrationTest
             // Old password no longer works.
             mockMvc
                 .post("/api/v1/auth/login") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = loginBody("kate@kliniq.local", DEFAULT_PASSWORD)
                 }.andExpect { status { isUnauthorized() } }
@@ -456,6 +481,7 @@ class AuthControllerIntegrationTest
             // New password works.
             mockMvc
                 .post("/api/v1/auth/login") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = loginBody("kate@kliniq.local", "new horse battery staple xyz")
                 }.andExpect { status { isOk() } }
@@ -465,11 +491,27 @@ class AuthControllerIntegrationTest
         fun `reset-password with bogus token returns 400 INVALID_TOKEN`() {
             mockMvc
                 .post("/api/v1/auth/password/reset") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = resetBody("not-a-real-token", "another long valid password 123")
                 }.andExpect {
                     status { isBadRequest() }
                     jsonPath("$.code") { value("INVALID_TOKEN") }
+                }
+        }
+
+        // ---- CSRF protection --------------------------------------------
+
+        @Test
+        fun `POST without CSRF token is rejected with 403`() {
+            mockMvc
+                .post("/api/v1/auth/register") {
+                    // intentionally no with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = registerBody(email = "noscrf@kliniq.local")
+                }.andExpect {
+                    status { isForbidden() }
+                    jsonPath("$.code") { value("FORBIDDEN") }
                 }
         }
 
@@ -481,6 +523,7 @@ class AuthControllerIntegrationTest
 
             mockMvc
                 .post("/api/v1/auth/login") {
+                    with(csrf())
                     contentType = MediaType.APPLICATION_JSON
                     content = loginBody("leo@kliniq.local", DEFAULT_PASSWORD)
                 }.andExpect { status { isOk() } }

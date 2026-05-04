@@ -11,6 +11,8 @@ import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.AccessDeniedHandler
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler
 
 // Sprint 1 Day 8 baseline:
 //   - Actuator health/info: public
@@ -64,8 +66,16 @@ class SecurityConfig {
                         )
                     },
                 )
-            }.csrf { it.disable() }
-            .formLogin { it.disable() }
+            }.csrf { csrf ->
+                // Double-submit cookie pattern (ADR-004). The cookie is
+                // readable by JS — the SPA reads it and echoes the value
+                // back in the X-XSRF-TOKEN header on every state-changing
+                // request. The unverified-cookie attacker can't forge that
+                // value, so cross-site forms can't drive logged-in actions.
+                csrf
+                    .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                    .csrfTokenRequestHandler(CsrfTokenRequestAttributeHandler())
+            }.formLogin { it.disable() }
             .httpBasic { it.disable() }
             .build()
 }
