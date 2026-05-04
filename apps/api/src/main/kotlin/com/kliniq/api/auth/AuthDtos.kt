@@ -50,6 +50,22 @@ data class VerifyRequest(
     }
 }
 
+data class ForgotPasswordRequest(
+    @field:NotBlank
+    @field:Email
+    @field:Size(max = RegisterRequest.MAX_EMAIL)
+    val email: String,
+)
+
+data class ResetPasswordRequest(
+    @field:NotBlank
+    @field:Size(min = 1, max = VerifyRequest.MAX_TOKEN)
+    val token: String,
+    @field:NotBlank
+    @field:Size(min = RegisterRequest.MIN_PASSWORD, max = RegisterRequest.MAX_PASSWORD)
+    val newPassword: String,
+)
+
 data class MessageResponse(
     val message: String,
 )

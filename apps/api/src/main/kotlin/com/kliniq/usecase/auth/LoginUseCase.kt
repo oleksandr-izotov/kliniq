@@ -2,6 +2,8 @@ package com.kliniq.usecase.auth
 
 import com.kliniq.domain.auth.Session
 import com.kliniq.domain.user.User
+import com.kliniq.infra.audit.AuditEntry
+import com.kliniq.infra.audit.AuditWriter
 import com.kliniq.infra.security.PasswordHasher
 import com.kliniq.infra.security.SessionStore
 import com.kliniq.persistence.user.UserRepository
@@ -25,6 +27,7 @@ class LoginUseCase(
     private val users: UserRepository,
     private val passwordHasher: PasswordHasher,
     private val sessions: SessionStore,
+    private val auditWriter: AuditWriter,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -58,6 +61,14 @@ class LoginUseCase(
         if (!passwordHasher.matches(password, storedHash)) return Result.InvalidCredentials
 
         val session = sessions.create(user.id)
+        auditWriter.record(
+            AuditEntry(
+                action = "user.login",
+                entityType = "user",
+                entityId = user.id,
+                actorUserId = user.id,
+            ),
+        )
         log.info("login: user {} authenticated; session {}", user.id, session.id.take(SESSION_LOG_PREFIX))
         return Result.Success(user, session)
     }

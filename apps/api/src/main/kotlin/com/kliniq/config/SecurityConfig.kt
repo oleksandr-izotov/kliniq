@@ -40,6 +40,8 @@ class SecurityConfig {
                         "/api/v1/auth/verify",
                         "/api/v1/auth/login",
                         "/api/v1/auth/logout",
+                        "/api/v1/auth/password/forgot",
+                        "/api/v1/auth/password/reset",
                     ).permitAll()
                 it.anyRequest().authenticated()
             }.addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)

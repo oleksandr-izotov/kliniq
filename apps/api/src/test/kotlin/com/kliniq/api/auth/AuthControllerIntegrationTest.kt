@@ -1,7 +1,9 @@
 package com.kliniq.api.auth
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.kliniq.db.tables.references.AUDIT_EVENTS
 import com.kliniq.db.tables.references.EMAIL_VERIFICATION_TOKENS
+import com.kliniq.db.tables.references.PASSWORD_RESET_TOKENS
 import com.kliniq.db.tables.references.USERS
 import com.kliniq.infra.mail.EmailSender
 import com.kliniq.infra.security.SessionCookieService
@@ -51,7 +53,11 @@ class AuthControllerIntegrationTest
             Mockito.reset(emailSender)
             // Tokens cascade-delete via FK ON DELETE CASCADE when users are dropped.
             dsl.deleteFrom(EMAIL_VERIFICATION_TOKENS).execute()
+            dsl.deleteFrom(PASSWORD_RESET_TOKENS).execute()
             dsl.deleteFrom(USERS).execute()
+            // audit_events is append-only at the DB level (triggers in V2 reject
+            // UPDATE/DELETE), so old rows accumulate across tests. Tests filter
+            // by entity_id of the user under test to isolate themselves.
         }
 
         // ---- helpers ------------------------------------------------------
@@ -82,6 +88,20 @@ class AuthControllerIntegrationTest
             verify(emailSender).sendEmailVerification(any(), any(), captor.capture())
             return captor.lastValue.substringAfter("token=")
         }
+
+        /** Captures the password-reset URL token. */
+        private fun captureResetToken(): String {
+            val captor = argumentCaptor<String>()
+            verify(emailSender).sendPasswordReset(any(), any(), captor.capture())
+            return captor.lastValue.substringAfter("token=")
+        }
+
+        private fun forgotBody(email: String) = objectMapper.writeValueAsString(mapOf("email" to email))
+
+        private fun resetBody(
+            token: String,
+            newPassword: String,
+        ) = objectMapper.writeValueAsString(mapOf("token" to token, "newPassword" to newPassword))
 
         /** Full `Set-Cookie` header value, including all attributes after the value=secret pair. */
         private fun MvcResult.setCookieHeader(): String? = response.getHeader("Set-Cookie")
@@ -337,6 +357,155 @@ class AuthControllerIntegrationTest
                 .get("/api/v1/auth/me") {
                     cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, cookieValue))
                 }.andExpect { status { isUnauthorized() } }
+        }
+
+        // ---- /password/forgot + /password/reset --------------------------
+
+        @Test
+        fun `forgot-password sends reset email when user exists and is verified`() {
+            registerAndVerify(email = "ivan@kliniq.local", displayName = "Ivan")
+            // Reset the mock so we don't see the verification email from setup.
+            Mockito.reset(emailSender)
+
+            mockMvc
+                .post("/api/v1/auth/password/forgot") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = forgotBody("ivan@kliniq.local")
+                }.andExpect { status { isOk() } }
+
+            verify(emailSender, times(1)).sendPasswordReset(
+                eq("ivan@kliniq.local"),
+                eq("Ivan"),
+                argThat { url -> url.contains("token=") && url.contains("/reset?") },
+            )
+        }
+
+        @Test
+        fun `forgot-password returns neutral when user does not exist`() {
+            mockMvc
+                .post("/api/v1/auth/password/forgot") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = forgotBody("ghost@nowhere.local")
+                }.andExpect { status { isOk() } }
+
+            verify(emailSender, never()).sendPasswordReset(any(), any(), any())
+        }
+
+        @Test
+        fun `forgot-password returns neutral when user is unverified`() {
+            // Register without verify.
+            mockMvc
+                .post("/api/v1/auth/register") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = registerBody(email = "jenny@kliniq.local")
+                }.andExpect { status { isOk() } }
+            Mockito.reset(emailSender)
+
+            mockMvc
+                .post("/api/v1/auth/password/forgot") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = forgotBody("jenny@kliniq.local")
+                }.andExpect { status { isOk() } }
+
+            verify(emailSender, never()).sendPasswordReset(any(), any(), any())
+        }
+
+        @Test
+        fun `reset-password updates the hash, invalidates sessions, and old password no longer works`() {
+            registerAndVerify(email = "kate@kliniq.local", displayName = "Kate")
+
+            // Active session before reset.
+            val loginResult =
+                mockMvc
+                    .post("/api/v1/auth/login") {
+                        contentType = MediaType.APPLICATION_JSON
+                        content = loginBody("kate@kliniq.local", DEFAULT_PASSWORD)
+                    }.andExpect { status { isOk() } }
+                    .andReturn()
+            val sessionCookie = loginResult.sessionCookieValue()!!
+
+            // Trigger forgot.
+            Mockito.reset(emailSender)
+            mockMvc
+                .post("/api/v1/auth/password/forgot") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = forgotBody("kate@kliniq.local")
+                }.andExpect { status { isOk() } }
+            val resetToken = captureResetToken()
+
+            // Reset.
+            mockMvc
+                .post("/api/v1/auth/password/reset") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = resetBody(resetToken, "new horse battery staple xyz")
+                }.andExpect { status { isOk() } }
+
+            // The session from before reset must be invalidated.
+            mockMvc
+                .get("/api/v1/auth/me") {
+                    cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, sessionCookie))
+                }.andExpect { status { isUnauthorized() } }
+
+            // Old password no longer works.
+            mockMvc
+                .post("/api/v1/auth/login") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = loginBody("kate@kliniq.local", DEFAULT_PASSWORD)
+                }.andExpect { status { isUnauthorized() } }
+
+            // New password works.
+            mockMvc
+                .post("/api/v1/auth/login") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = loginBody("kate@kliniq.local", "new horse battery staple xyz")
+                }.andExpect { status { isOk() } }
+        }
+
+        @Test
+        fun `reset-password with bogus token returns 400 INVALID_TOKEN`() {
+            mockMvc
+                .post("/api/v1/auth/password/reset") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = resetBody("not-a-real-token", "another long valid password 123")
+                }.andExpect {
+                    status { isBadRequest() }
+                    jsonPath("$.code") { value("INVALID_TOKEN") }
+                }
+        }
+
+        // ---- audit -------------------------------------------------------
+
+        @Test
+        fun `audit log records register, verify, and login events for the user`() {
+            registerAndVerify(email = "leo@kliniq.local", displayName = "Leo")
+
+            mockMvc
+                .post("/api/v1/auth/login") {
+                    contentType = MediaType.APPLICATION_JSON
+                    content = loginBody("leo@kliniq.local", DEFAULT_PASSWORD)
+                }.andExpect { status { isOk() } }
+
+            // Find the userId from the DB to scope the audit query.
+            val userId =
+                dsl
+                    .select(USERS.ID)
+                    .from(USERS)
+                    .where(USERS.EMAIL_NORMALIZED.eq("leo@kliniq.local"))
+                    .fetchOne(0, java.util.UUID::class.java)!!
+
+            val actions =
+                dsl
+                    .select(AUDIT_EVENTS.ACTION)
+                    .from(AUDIT_EVENTS)
+                    .where(AUDIT_EVENTS.ENTITY_ID.eq(userId))
+                    .orderBy(AUDIT_EVENTS.CREATED_AT)
+                    .fetch(AUDIT_EVENTS.ACTION)
+
+            assertThat(actions).containsExactly(
+                "user.registered",
+                "user.email_verified",
+                "user.login",
+            )
         }
 
         companion object {

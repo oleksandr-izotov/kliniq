@@ -3,6 +3,8 @@ package com.kliniq.usecase.auth
 import com.github.f4b6a3.uuid.UuidCreator
 import com.kliniq.domain.user.NewUser
 import com.kliniq.domain.user.Role
+import com.kliniq.infra.audit.AuditEntry
+import com.kliniq.infra.audit.AuditWriter
 import com.kliniq.infra.mail.EmailSender
 import com.kliniq.infra.security.PasswordHasher
 import com.kliniq.persistence.user.UserRepository
@@ -22,11 +24,13 @@ import java.util.UUID
  *     a partial commit + email-out-of-band can never happen.
  */
 @Service
+@Suppress("LongParameterList") // orchestration use case wires many collaborators
 class RegisterUseCase(
     private val users: UserRepository,
     private val tokens: EmailVerificationTokenService,
     private val passwordHasher: PasswordHasher,
     private val emailSender: EmailSender,
+    private val auditWriter: AuditWriter,
     private val tx: TransactionTemplate,
     @Value("\${app.web.base-url}") private val webBaseUrl: String,
 ) {
@@ -61,6 +65,15 @@ class RegisterUseCase(
             ),
         )
         val plaintext = tokens.issue(userId)
+        auditWriter.record(
+            AuditEntry(
+                action = "user.registered",
+                entityType = "user",
+                entityId = userId,
+                actorUserId = userId,
+                after = mapOf("email" to cmd.email, "displayName" to cmd.displayName, "role" to Role.STAFF.name),
+            ),
+        )
         log.info("register: created user {} and issued verification token", userId)
         return PendingVerification(cmd.email, cmd.displayName, plaintext)
     }

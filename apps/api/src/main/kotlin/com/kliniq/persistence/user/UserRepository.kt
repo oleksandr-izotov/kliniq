@@ -29,4 +29,14 @@ interface UserRepository {
         id: UUID,
         verifiedAt: OffsetDateTime,
     ): Boolean
+
+    /**
+     * Replace the user's password hash. Returns true if a row was updated.
+     * Caller is responsible for invalidating the user's existing sessions
+     * separately — see [com.kliniq.infra.security.SessionStore.invalidateAllForUser].
+     */
+    fun updatePasswordHash(
+        id: UUID,
+        passwordHash: String,
+    ): Boolean
 }

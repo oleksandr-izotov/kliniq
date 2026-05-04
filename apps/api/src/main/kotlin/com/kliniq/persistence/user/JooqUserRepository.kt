@@ -68,6 +68,19 @@ class JooqUserRepository(
                 .execute()
         return updated == 1
     }
+
+    override fun updatePasswordHash(
+        id: UUID,
+        passwordHash: String,
+    ): Boolean {
+        val updated =
+            dsl
+                .update(USERS)
+                .set(USERS.PASSWORD_HASH, passwordHash)
+                .where(USERS.ID.eq(id))
+                .execute()
+        return updated == 1
+    }
 }
 
 private fun UsersRecord.toDomain(): User =

@@ -3,9 +3,11 @@ package com.kliniq.api.auth
 import com.kliniq.api.error.ApiErrorResponse
 import com.kliniq.infra.security.KliniqAuthentication
 import com.kliniq.infra.security.SessionCookieService
+import com.kliniq.usecase.auth.ForgotPasswordUseCase
 import com.kliniq.usecase.auth.LoginUseCase
 import com.kliniq.usecase.auth.LogoutUseCase
 import com.kliniq.usecase.auth.RegisterUseCase
+import com.kliniq.usecase.auth.ResetPasswordUseCase
 import com.kliniq.usecase.auth.VerifyEmailUseCase
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -22,11 +24,14 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/v1/auth")
+@Suppress("LongParameterList") // controller orchestrates many use cases via DI
 class AuthController(
     private val registerUseCase: RegisterUseCase,
     private val verifyEmailUseCase: VerifyEmailUseCase,
     private val loginUseCase: LoginUseCase,
     private val logoutUseCase: LogoutUseCase,
+    private val forgotPasswordUseCase: ForgotPasswordUseCase,
+    private val resetPasswordUseCase: ResetPasswordUseCase,
     private val cookies: SessionCookieService,
 ) {
     /**
@@ -110,6 +115,37 @@ class AuthController(
         SecurityContextHolder.clearContext()
         return MessageResponse("Signed out.")
     }
+
+    /**
+     * Always returns 200 with a neutral message — never reveals whether the
+     * email belongs to a registered user.
+     */
+    @PostMapping("/password/forgot")
+    @ResponseStatus(HttpStatus.OK)
+    fun forgotPassword(
+        @Valid @RequestBody request: ForgotPasswordRequest,
+    ): MessageResponse {
+        forgotPasswordUseCase.forgot(request.email.trim())
+        return MessageResponse(
+            message = "If this email is registered and verified, a reset link is on its way.",
+        )
+    }
+
+    @PostMapping("/password/reset")
+    fun resetPassword(
+        @Valid @RequestBody request: ResetPasswordRequest,
+    ): ResponseEntity<*> =
+        when (resetPasswordUseCase.reset(request.token, request.newPassword)) {
+            ResetPasswordUseCase.Result.Success ->
+                ResponseEntity.ok(MessageResponse("Password updated. You can sign in with your new password."))
+            ResetPasswordUseCase.Result.InvalidToken ->
+                ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                    com.kliniq.api.error.ApiErrorResponse(
+                        code = "INVALID_TOKEN",
+                        message = "This reset link is invalid or has expired.",
+                    ),
+                )
+        }
 
     /**
      * Returns the currently authenticated user. The SessionAuthenticationFilter

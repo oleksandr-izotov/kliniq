@@ -1,5 +1,7 @@
 package com.kliniq.usecase.auth
 
+import com.kliniq.infra.audit.AuditEntry
+import com.kliniq.infra.audit.AuditWriter
 import com.kliniq.persistence.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -16,6 +18,7 @@ import java.time.Clock
 class VerifyEmailUseCase(
     private val tokens: EmailVerificationTokenService,
     private val users: UserRepository,
+    private val auditWriter: AuditWriter,
     private val clock: Clock,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -29,6 +32,15 @@ class VerifyEmailUseCase(
             // Idempotent: token was valid but the user is already verified.
             // Treat as success — re-clicking the link should never look broken.
             log.info("verify: user {} was already verified; treating as success", userId)
+        } else {
+            auditWriter.record(
+                AuditEntry(
+                    action = "user.email_verified",
+                    entityType = "user",
+                    entityId = userId,
+                    actorUserId = userId,
+                ),
+            )
         }
         return Result.Verified
     }
