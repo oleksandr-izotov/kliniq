@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.context.ActiveProfiles
@@ -43,6 +44,7 @@ class AuthControllerIntegrationTest
         private val mockMvc: MockMvc,
         private val objectMapper: ObjectMapper,
         private val dsl: DSLContext,
+        private val redis: StringRedisTemplate,
     ) {
         @MockitoBean
         private lateinit var emailSender: EmailSender
@@ -59,6 +61,9 @@ class AuthControllerIntegrationTest
             // audit_events is append-only at the DB level (triggers in V2 reject
             // UPDATE/DELETE), so old rows accumulate across tests. Tests filter
             // by entity_id of the user under test to isolate themselves.
+            // Wipe rate-limit counters so a flurry of register/login calls in
+            // one test doesn't trip the limit on the next one.
+            redis.keys("rate-limit:*")?.takeIf { it.isNotEmpty() }?.let(redis::delete)
         }
 
         // ---- helpers ------------------------------------------------------
@@ -512,6 +517,32 @@ class AuthControllerIntegrationTest
                 }.andExpect {
                     status { isForbidden() }
                     jsonPath("$.code") { value("FORBIDDEN") }
+                }
+        }
+
+        // ---- rate limiting ----------------------------------------------
+
+        @Test
+        fun `password-forgot returns 429 RATE_LIMITED after the IP burns through its window`() {
+            // Limit is 3 per minute; the 4th call from the same IP must be rejected.
+            repeat(3) {
+                mockMvc
+                    .post("/api/v1/auth/password/forgot") {
+                        with(csrf())
+                        contentType = MediaType.APPLICATION_JSON
+                        content = forgotBody("anyone-$it@kliniq.local")
+                    }.andExpect { status { isOk() } }
+            }
+
+            mockMvc
+                .post("/api/v1/auth/password/forgot") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = forgotBody("nope@kliniq.local")
+                }.andExpect {
+                    status { isTooManyRequests() }
+                    jsonPath("$.code") { value("RATE_LIMITED") }
+                    header { exists("Retry-After") }
                 }
         }
 
