@@ -72,9 +72,18 @@ class SecurityConfig {
                 // back in the X-XSRF-TOKEN header on every state-changing
                 // request. The unverified-cookie attacker can't forge that
                 // value, so cross-site forms can't drive logged-in actions.
+                //
+                // setCsrfRequestAttributeName(null) forces eager token
+                // generation. With Spring 6's default deferred handler the
+                // cookie isn't written until something calls getToken() —
+                // and our 401 entry point short-circuits the chain before
+                // anything does. Eager generation guarantees the SPA can
+                // prime the cookie with a single GET regardless of auth.
+                val requestHandler = CsrfTokenRequestAttributeHandler()
+                requestHandler.setCsrfRequestAttributeName(null)
                 csrf
                     .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                    .csrfTokenRequestHandler(CsrfTokenRequestAttributeHandler())
+                    .csrfTokenRequestHandler(requestHandler)
             }.formLogin { it.disable() }
             .httpBasic { it.disable() }
             .build()
