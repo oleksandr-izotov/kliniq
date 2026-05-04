@@ -12,9 +12,12 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Backend (Kotlin + Spring Boot) — JUnit + Spring context load against real
-  # postgres and redis containers. Uses the `test` profile defined in
-  # apps/api/src/test/resources/application-test.yml.
+  # Backend (Kotlin + Spring Boot) — schema + codegen, lint, static analysis,
+  # and Spring context tests against real Postgres and Redis. Tests use
+  # Testcontainers via @ServiceConnection (so they spin up their own DB), but
+  # the build-time `flywayMigrate` + `generateJooq` chain still needs a real
+  # Postgres — that's what the postgres service container below provides on
+  # the canonical port 5432 (overriding our local default of 55432).
   # ---------------------------------------------------------------------------
   api:
     name: api · build & test
@@ -34,14 +37,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
-      redis:
-        image: redis:7.4-alpine
-        ports: ['6379:6379']
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    env:
+      ORG_GRADLE_PROJECT_dbPort: '5432'
 
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +51,13 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      # Codegen runs first: applies V1+V2 to the postgres service via Flyway
+      # and writes Kotlin sources under build/generated-sources/jooq. Doing
+      # this up-front means downstream tasks can be evaluated independently.
+      - name: Generate jOOQ sources
+        working-directory: apps/api
+        run: ./gradlew flywayClean flywayMigrate generateJooq
 
       - name: Lint (ktlint)
         working-directory: apps/api

@@ -1,0 +1,71 @@
+package com.kliniq.persistence.user
+
+import com.kliniq.db.tables.records.UsersRecord
+import com.kliniq.db.tables.references.USERS
+import com.kliniq.domain.user.NewUser
+import com.kliniq.domain.user.Role
+import com.kliniq.domain.user.Specialty
+import com.kliniq.domain.user.User
+import com.kliniq.domain.user.UserStatus
+import org.jooq.DSLContext
+import org.springframework.stereotype.Repository
+import java.util.UUID
+
+@Repository
+class JooqUserRepository(
+    private val dsl: DSLContext,
+) : UserRepository {
+    override fun create(newUser: NewUser): User {
+        val record =
+            dsl
+                .insertInto(USERS)
+                .set(USERS.ID, newUser.id)
+                .set(USERS.EMAIL, newUser.email)
+                .set(USERS.PASSWORD_HASH, newUser.passwordHash)
+                .set(USERS.DISPLAY_NAME, newUser.displayName)
+                .set(USERS.ROLE, newUser.role.name)
+                .set(USERS.IS_SURGEON, newUser.isSurgeon)
+                .set(USERS.SPECIALTY, newUser.specialty?.name)
+                // status, created_at, updated_at default at the DB level
+                .returning()
+                .fetchOne() ?: error("INSERT into users returned no row for id=${newUser.id}")
+        return record.toDomain()
+    }
+
+    override fun findById(id: UUID): User? =
+        dsl
+            .selectFrom(USERS)
+            .where(USERS.ID.eq(id))
+            .fetchOne()
+            ?.toDomain()
+
+    override fun findByEmail(email: String): User? =
+        dsl
+            .selectFrom(USERS)
+            .where(USERS.EMAIL_NORMALIZED.eq(email.lowercase()))
+            .fetchOne()
+            ?.toDomain()
+
+    override fun existsByEmail(email: String): Boolean =
+        dsl.fetchExists(
+            dsl
+                .selectOne()
+                .from(USERS)
+                .where(USERS.EMAIL_NORMALIZED.eq(email.lowercase())),
+        )
+}
+
+private fun UsersRecord.toDomain(): User =
+    User(
+        id = requireNotNull(id) { "users.id is NOT NULL but record produced null" },
+        email = requireNotNull(email),
+        emailVerifiedAt = emailVerifiedAt,
+        passwordHash = passwordHash,
+        displayName = requireNotNull(displayName),
+        role = Role.valueOf(requireNotNull(role)),
+        isSurgeon = requireNotNull(isSurgeon),
+        specialty = specialty?.let(Specialty::valueOf),
+        status = UserStatus.valueOf(requireNotNull(status)),
+        createdAt = requireNotNull(createdAt),
+        updatedAt = requireNotNull(updatedAt),
+    )
