@@ -3,13 +3,13 @@
 **Goal:** Empty repo → both apps boot, talk to PG/Redis, run over HTTPS locally, CI is green.
 
 **Definition of done:**
-- [ ] `pnpm install && docker compose up -d` from a fresh clone gets infra running
-- [ ] `cd apps/api && ./gradlew bootRun` starts API on https://localhost:8443/health → `{"status":"UP"}`
-- [ ] `cd apps/web && pnpm dev` starts SvelteKit on https://localhost:5173 → renders "Hello Kliniq"
-- [ ] Frontend `/` calls API `/health` and shows the response
-- [ ] Push to GitHub → CI runs lint + tests + typecheck on both apps and passes
-- [ ] Pre-commit hook blocks committing a `.env`
-- [ ] `docs/` is fully populated (already done — you're reading them)
+- [x] `pnpm install && docker compose up -d` from a fresh clone gets infra running
+- [x] `cd apps/api && ./gradlew bootRun` starts API on https://localhost:8443/health → `{"status":"UP"}`
+- [x] `cd apps/web && pnpm dev` starts SvelteKit on https://localhost:5173 → renders "Hello Kliniq"
+- [x] Frontend `/` calls API `/health` and shows the response (Sprint 1 later replaced this with the authenticated home, but the boot-test page shipped on Day 4)
+- [x] Push to GitHub → CI runs lint + tests + typecheck on both apps and passes
+- [x] Pre-commit hook blocks committing a `.env` (`.gitignore` excludes `.env*`, gitleaks scans staged content)
+- [x] `docs/` is fully populated (already done — you're reading them)
 
 **Estimated effort:** 3-5 days at chaotic pace.
 
@@ -554,3 +554,56 @@ git push
 - Coolify, Hetzner, deployment → after V1
 
 If you find yourself adding any of these, stop and put it in a TODO file. Sprint 0 is _only_ scaffolding.
+
+---
+
+## Sprint 0 retro
+
+**What went well**
+
+- Spring Initializr + `pnpm dlx shadcn-svelte init` consumed most of the
+  scaffolding. The intentional "no real code" scope kept it honest.
+- `compose.yaml` (postgres + redis + mailpit) was stable from day one
+  and hasn't needed changes since — that file paid for itself many
+  times over.
+- Lefthook + gitleaks + commitlint gated commits from the very first
+  commit, which caught at least one local lint break before it could
+  hit CI.
+
+**What was harder than expected**
+
+- Java 25 ↔ Gradle 8.14 incompatibility: `JAVA_HOME` was `openjdk-25.0.1`
+  on this machine but Gradle's bundled Kotlin compiler couldn't parse
+  the version string. Fixed by pinning a foojay-resolver toolchain to
+  Java 21 via `gradle/gradle-daemon-jvm.properties`.
+- Postgres port collision: the host already runs a native
+  `postgresql-x64-18` Windows service on 5432. Spring quietly connected
+  to it instead of the compose container and fell over on auth. Switched
+  the host-side compose mapping to **55432** and updated the dev YAML.
+- Spring Boot 3.5's "auto-manage compose lifecycle" feature picked up
+  our `compose.yaml` and overrode datasource credentials silently.
+  Disabled with `spring.docker.compose.enabled: false`.
+
+**Time spent vs estimate**
+
+Estimated 3–5 days; actual was effectively half a day across seven
+commits on 2026-05-04 (`4a0fa14` → `4fb3335`). The estimate assumed
+manual setup; AI-pair-programming compressed the boilerplate part.
+The hard parts were the three environmental gotchas above, not the
+template-following.
+
+**What I'd carry into Sprint 1**
+
+- The "compose / bootRun / pnpm dev" three-terminal habit became Day 1
+  of every session and stayed annoying through Sprint 1. Already
+  flagged in Sprint 1 retro as the Sprint 2 DX target.
+- The compose stack going down between sessions silently breaks
+  everything — added a "is the stack up?" probe at the top of
+  `scripts/smoke_test.py` later, but a single `make dev` (Sprint 2)
+  is the real fix.
+- mkcert + Vite HTTPS + Spring HTTPS all work once configured, but
+  the cert-conversion step (PEM → PKCS12 for Spring) is fiddly and
+  poorly documented; the README quick-start should make this a
+  one-command thing for the next clean checkout.
+
+→ Sprint 1 (Auth) followed immediately on the same day.
