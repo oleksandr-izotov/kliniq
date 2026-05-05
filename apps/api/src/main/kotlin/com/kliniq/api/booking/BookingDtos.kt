@@ -78,3 +78,28 @@ data class BookingConflictDetail(
     val message: String,
     val occludingBookingId: UUID?,
 )
+
+/**
+ * Partial update. Status changes are intentionally absent — those go
+ * through dedicated /cancel /start /complete endpoints.
+ */
+data class UpdateBookingRequest(
+    val operatingRoomId: UUID? = null,
+    val surgeonId: UUID? = null,
+    val startsAt: OffsetDateTime? = null,
+    val endsAt: OffsetDateTime? = null,
+    @field:Size(min = 1, max = CreateBookingRequest.MAX_OP_TYPE)
+    val opType: String? = null,
+    @field:Size(max = CreateBookingRequest.MAX_NOTES)
+    val notes: String? = null,
+)
+
+/** Optional reason captured in the audit row. */
+data class CancelBookingRequest(
+    @field:Size(max = MAX_REASON)
+    val reason: String? = null,
+) {
+    companion object {
+        const val MAX_REASON = 500
+    }
+}

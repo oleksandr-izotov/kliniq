@@ -65,7 +65,11 @@ class PasskeyControllerIntegrationTest
         @BeforeEach
         fun reset() {
             Mockito.reset(emailSender)
-            // FK ON DELETE CASCADE clears passkeys when users go.
+            // FK ON DELETE CASCADE clears passkeys when users go, but bookings +
+            // operating_rooms reference users with ON DELETE RESTRICT — drop them
+            // first when a prior test class left rows behind.
+            dsl.deleteFrom(com.kliniq.db.tables.references.BOOKINGS).execute()
+            dsl.deleteFrom(com.kliniq.db.tables.references.OPERATING_ROOMS).execute()
             dsl.deleteFrom(PASSKEYS).execute()
             dsl.deleteFrom(USERS).execute()
             redis.keys("rate-limit:*")?.takeIf { it.isNotEmpty() }?.let(redis::delete)

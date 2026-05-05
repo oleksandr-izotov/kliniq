@@ -48,6 +48,9 @@ class OperatingRoomControllerIntegrationTest
         @BeforeEach
         fun reset() {
             Mockito.reset(emailSender)
+            // Bookings FK back to operating_rooms AND users with ON DELETE RESTRICT,
+            // so they have to be dropped first when prior test classes left rows.
+            dsl.deleteFrom(com.kliniq.db.tables.references.BOOKINGS).execute()
             dsl.deleteFrom(OPERATING_ROOMS).execute()
             dsl.deleteFrom(USERS).execute()
             redis.keys("rate-limit:*")?.takeIf { it.isNotEmpty() }?.let(redis::delete)

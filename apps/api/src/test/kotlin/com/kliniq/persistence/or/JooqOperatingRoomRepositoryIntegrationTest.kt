@@ -28,8 +28,9 @@ class JooqOperatingRoomRepositoryIntegrationTest
     ) {
         @BeforeEach
         fun cleanRows() {
-            // Bookings live in the same schema and FK-reference operating_rooms,
-            // but no test in this class creates bookings — direct DELETE is safe.
+            // Bookings FK to operating_rooms with ON DELETE RESTRICT — drop
+            // them first if a prior test class left any.
+            dsl.deleteFrom(com.kliniq.db.tables.references.BOOKINGS).execute()
             dsl.deleteFrom(OPERATING_ROOMS).execute()
         }
 

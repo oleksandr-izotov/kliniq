@@ -65,6 +65,10 @@ class AuthControllerIntegrationTest
                 .whenever(breachChecker.isBreached(org.mockito.kotlin.any()))
                 .thenReturn(false)
             // Tokens cascade-delete via FK ON DELETE CASCADE when users are dropped.
+            // Bookings + operating_rooms FK back to users with ON DELETE RESTRICT,
+            // so they have to go first if a prior test class created any.
+            dsl.deleteFrom(com.kliniq.db.tables.references.BOOKINGS).execute()
+            dsl.deleteFrom(com.kliniq.db.tables.references.OPERATING_ROOMS).execute()
             dsl.deleteFrom(EMAIL_VERIFICATION_TOKENS).execute()
             dsl.deleteFrom(PASSWORD_RESET_TOKENS).execute()
             dsl.deleteFrom(USERS).execute()

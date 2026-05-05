@@ -21,6 +21,9 @@ interface BookingRepository {
 
     fun findById(id: UUID): Booking?
 
+    /** Apply zero or more filters; ordered by `starts_at` ascending. */
+    fun findFiltered(filter: BookingFilter): List<Booking>
+
     /**
      * Active bookings (status IN SCHEDULED, IN_PROGRESS) on [operatingRoomId]
      * whose half-open time range overlaps [range]. Optionally exclude one
@@ -67,3 +70,16 @@ interface BookingRepository {
         target: BookingStatus,
     ): Booking?
 }
+
+/**
+ * Optional filters for [BookingRepository.findFiltered]. `null` on a field
+ * means "skip this predicate". `from` / `to` are matched against
+ * `starts_at` (the schedule view's natural sort key).
+ */
+data class BookingFilter(
+    val operatingRoomId: UUID? = null,
+    val surgeonId: UUID? = null,
+    val fromInclusive: OffsetDateTime? = null,
+    val toExclusive: OffsetDateTime? = null,
+    val status: BookingStatus? = null,
+)

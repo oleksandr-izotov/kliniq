@@ -29,6 +29,11 @@ class JooqUserRepositoryIntegrationTest
     ) {
         @BeforeEach
         fun cleanUserRows() {
+            // Drop bookings + operating_rooms first — both FK back to users
+            // with ON DELETE RESTRICT, so a prior test class that left rows
+            // there would block the USERS delete below.
+            dsl.deleteFrom(com.kliniq.db.tables.references.BOOKINGS).execute()
+            dsl.deleteFrom(com.kliniq.db.tables.references.OPERATING_ROOMS).execute()
             dsl.deleteFrom(USERS).execute()
         }
 

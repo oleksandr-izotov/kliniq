@@ -43,6 +43,25 @@ class JooqBookingRepository(
             .fetchOne()
             ?.toDomain()
 
+    override fun findFiltered(filter: BookingFilter): List<Booking> {
+        val conditions = mutableListOf<org.jooq.Condition>()
+        filter.operatingRoomId?.let { conditions += BOOKINGS.OPERATING_ROOM_ID.eq(it) }
+        filter.surgeonId?.let { conditions += BOOKINGS.SURGEON_ID.eq(it) }
+        filter.fromInclusive?.let { conditions += BOOKINGS.STARTS_AT.ge(it) }
+        filter.toExclusive?.let { conditions += BOOKINGS.STARTS_AT.lt(it) }
+        filter.status?.let { conditions += BOOKINGS.STATUS.eq(it.name) }
+        val query =
+            if (conditions.isEmpty()) {
+                dsl.selectFrom(BOOKINGS)
+            } else {
+                dsl.selectFrom(BOOKINGS).where(
+                    org.jooq.impl.DSL
+                        .and(conditions),
+                )
+            }
+        return query.orderBy(BOOKINGS.STARTS_AT.asc()).fetch().map { it.toDomain() }
+    }
+
     override fun findActiveOverlapping(
         operatingRoomId: UUID,
         range: BookingTimeRange,
