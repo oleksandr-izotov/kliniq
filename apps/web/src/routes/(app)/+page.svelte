@@ -45,7 +45,10 @@
 				session is alive — you can sign in and out, and a logged-out visitor will be redirected back
 				to the login page automatically.
 			</p>
-			<div class="flex justify-end">
+			<div class="flex items-center justify-between">
+				<a href="/settings/passkeys" class="text-sm font-medium text-primary hover:underline">
+					Manage passkeys →
+				</a>
 				<Button variant="outline" onclick={logout} disabled={signingOut}>
 					{signingOut ? 'Signing out…' : 'Sign out'}
 				</Button>

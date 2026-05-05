@@ -39,11 +39,15 @@ export class ApiError_ extends Error {
 	}
 }
 
-interface JsonInit extends Omit<RequestInit, 'body'> {
+export interface JsonInit extends Omit<RequestInit, 'body'> {
 	body?: unknown;
 }
 
-async function request<T>(method: string, path: string, init: JsonInit = {}): Promise<T> {
+/**
+ * Shared JSON request helper used by every `*Api` object in this folder.
+ * Handles cookies, CSRF header echo, and the ApiError_ envelope.
+ */
+export async function apiRequest<T>(method: string, path: string, init: JsonInit = {}): Promise<T> {
 	const headers = withCsrfHeader(init.headers);
 	headers.set('Content-Type', 'application/json');
 	headers.set('Accept', 'application/json');
@@ -80,31 +84,31 @@ async function request<T>(method: string, path: string, init: JsonInit = {}): Pr
 
 export const authApi = {
 	register(input: { email: string; password: string; displayName: string }) {
-		return request<ApiMessage>('POST', '/api/v1/auth/register', { body: input });
+		return apiRequest<ApiMessage>('POST', '/api/v1/auth/register', { body: input });
 	},
 
 	verify(input: { token: string }) {
-		return request<ApiMessage>('POST', '/api/v1/auth/verify', { body: input });
+		return apiRequest<ApiMessage>('POST', '/api/v1/auth/verify', { body: input });
 	},
 
 	login(input: { email: string; password: string }) {
-		return request<ApiUser>('POST', '/api/v1/auth/login', { body: input });
+		return apiRequest<ApiUser>('POST', '/api/v1/auth/login', { body: input });
 	},
 
 	logout() {
-		return request<ApiMessage>('POST', '/api/v1/auth/logout', {});
+		return apiRequest<ApiMessage>('POST', '/api/v1/auth/logout', {});
 	},
 
 	me() {
-		return request<ApiUser>('GET', '/api/v1/auth/me', {});
+		return apiRequest<ApiUser>('GET', '/api/v1/auth/me', {});
 	},
 
 	forgotPassword(input: { email: string }) {
-		return request<ApiMessage>('POST', '/api/v1/auth/password/forgot', { body: input });
+		return apiRequest<ApiMessage>('POST', '/api/v1/auth/password/forgot', { body: input });
 	},
 
 	resetPassword(input: { token: string; newPassword: string }) {
-		return request<ApiMessage>('POST', '/api/v1/auth/password/reset', { body: input });
+		return apiRequest<ApiMessage>('POST', '/api/v1/auth/password/reset', { body: input });
 	},
 
 	/**
@@ -113,7 +117,7 @@ export const authApi = {
 	 */
 	async primeCsrf() {
 		try {
-			await request('GET', '/api/v1/auth/me', {});
+			await apiRequest('GET', '/api/v1/auth/me', {});
 		} catch (e) {
 			// 401 is fine — we just wanted the cookie; an authentic-or-not check
 			// is the side-effect of the GET, not the goal.

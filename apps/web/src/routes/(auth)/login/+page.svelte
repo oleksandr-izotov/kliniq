@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
@@ -7,11 +8,18 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { ApiError_, authApi } from '$lib/auth/api';
+	import { passkeyApi, PasskeyCeremonyError, passkeysSupported } from '$lib/auth/passkeys';
 
 	let email = $state('');
 	let password = $state('');
 	let submitting = $state(false);
+	let passkeySubmitting = $state(false);
+	let canUsePasskeys = $state(false);
 	let formError = $state<string | null>(null);
+
+	onMount(() => {
+		canUsePasskeys = passkeysSupported();
+	});
 
 	/** Only honour same-origin paths from `?next=` — never an external URL. */
 	function safeNext(raw: string | null): string {
@@ -27,15 +35,39 @@
 		try {
 			const user = await authApi.login({ email: email.trim(), password });
 			toast.success(`Welcome back, ${user.displayName}`);
-			// Refresh server load functions so locals.user picks up the new session.
-			await invalidateAll();
-			await goto(safeNext(page.url.searchParams.get('next')));
+			await afterSignIn();
 		} catch (e) {
-			const handled = handleApiError(e);
-			formError = handled;
+			formError = handleApiError(e);
 		} finally {
 			submitting = false;
 		}
+	}
+
+	async function onPasskey() {
+		formError = null;
+		passkeySubmitting = true;
+		try {
+			// `email` is optional. If the user typed one, narrow the prompt to
+			// their credentials; otherwise the browser shows discoverable keys.
+			const trimmed = email.trim();
+			const user = await passkeyApi.signIn(trimmed.length > 0 ? trimmed : undefined);
+			toast.success(`Welcome back, ${user.displayName}`);
+			await afterSignIn();
+		} catch (e) {
+			if (e instanceof PasskeyCeremonyError) {
+				formError = e.message;
+			} else {
+				formError = handleApiError(e);
+			}
+		} finally {
+			passkeySubmitting = false;
+		}
+	}
+
+	async function afterSignIn() {
+		// Refresh server load functions so locals.user picks up the new session.
+		await invalidateAll();
+		await goto(safeNext(page.url.searchParams.get('next')));
 	}
 
 	function handleApiError(e: unknown): string {
@@ -49,6 +81,10 @@
 				return 'This account has been disabled. Contact your administrator.';
 			case 'RATE_LIMITED':
 				return 'Too many attempts. Please wait a minute and try again.';
+			case 'PASSKEY_INVALID':
+				return 'Could not verify that passkey. Try again, or sign in with your password.';
+			case 'PASSKEY_CHALLENGE_EXPIRED':
+				return 'The passkey prompt timed out. Try again.';
 			default:
 				return e.payload.message || 'Something went wrong. Please try again.';
 		}
@@ -74,10 +110,10 @@
 				<Input
 					id="email"
 					type="email"
-					autocomplete="email"
+					autocomplete="email webauthn"
 					bind:value={email}
 					required
-					disabled={submitting}
+					disabled={submitting || passkeySubmitting}
 					placeholder="you@clinic.example"
 				/>
 			</div>
@@ -93,7 +129,7 @@
 					autocomplete="current-password"
 					bind:value={password}
 					required
-					disabled={submitting}
+					disabled={submitting || passkeySubmitting}
 					minlength={12}
 				/>
 			</div>
@@ -107,9 +143,30 @@
 				</p>
 			{/if}
 
-			<Button type="submit" class="w-full" disabled={submitting}>
+			<Button type="submit" class="w-full" disabled={submitting || passkeySubmitting}>
 				{submitting ? 'Signing in…' : 'Sign in'}
 			</Button>
+
+			{#if canUsePasskeys}
+				<div class="relative my-2">
+					<div class="absolute inset-0 flex items-center border-border/60">
+						<span class="w-full border-t"></span>
+					</div>
+					<div class="relative flex justify-center text-xs uppercase">
+						<span class="bg-card px-2 text-muted-foreground">or</span>
+					</div>
+				</div>
+
+				<Button
+					type="button"
+					variant="outline"
+					class="w-full"
+					onclick={onPasskey}
+					disabled={submitting || passkeySubmitting}
+				>
+					{passkeySubmitting ? 'Waiting for prompt…' : 'Sign in with a passkey'}
+				</Button>
+			{/if}
 		</form>
 	</Card.Content>
 </Card.Root>
