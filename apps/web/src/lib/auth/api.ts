@@ -1,4 +1,14 @@
-import { withCsrfHeader } from './csrf';
+import { readCsrfToken, withCsrfHeader } from './csrf';
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+function isSafeMethod(method: string): boolean {
+	return SAFE_METHODS.has(method.toUpperCase());
+}
+
+function hasCsrfCookie(): boolean {
+	return readCsrfToken() !== null;
+}
 
 /**
  * Wire types for our `/api/v1/auth/*` endpoints. Hand-written for V1; we'll
@@ -48,6 +58,20 @@ export interface JsonInit extends Omit<RequestInit, 'body'> {
  * Handles cookies, CSRF header echo, and the ApiError_ envelope.
  */
 export async function apiRequest<T>(method: string, path: string, init: JsonInit = {}): Promise<T> {
+	// State-changing requests need an X-XSRF-TOKEN echo of the cookie.
+	// (auth)/+layout calls primeCsrf() in onMount but doesn't await it —
+	// if the user (or a Playwright test) submits a form before that GET
+	// finishes, we'd POST without a cookie and the backend would 403.
+	// Lazily seed the cookie here when we notice it's missing.
+	if (!isSafeMethod(method) && !hasCsrfCookie()) {
+		try {
+			await fetch('/api/v1/auth/me', { credentials: 'include' });
+		} catch {
+			// If /me itself is unreachable the original request will fail
+			// next, with a more useful error envelope.
+		}
+	}
+
 	const headers = withCsrfHeader(init.headers);
 	headers.set('Content-Type', 'application/json');
 	headers.set('Accept', 'application/json');
