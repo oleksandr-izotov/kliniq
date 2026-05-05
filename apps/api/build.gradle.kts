@@ -69,6 +69,13 @@ dependencies {
     // around it ourselves rather than pulling in webauthn4j-spring-security.
     implementation("com.webauthn4j:webauthn4j-core:0.29.1.RELEASE")
 
+    // DevTools restarts the running app when build/classes/ changes.
+    // Pair with `./gradlew --continuous build` in another terminal (or
+    // IntelliJ's auto-build) for hot Kotlin reload — `pnpm dev:all`
+    // does this automatically. Excluded from the production jar via
+    // `developmentOnly`.
+    developmentOnly("org.springframework.boot:spring-boot-devtools")
+
     // Kotlin runtime support
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")

@@ -13,11 +13,19 @@
   "packageManager": "pnpm@10.29.3",
   "scripts": {
     "prepare": "lefthook install || true",
-    "commitlint": "commitlint --edit"
+    "commitlint": "commitlint --edit",
+    "infra:up": "docker compose up -d --wait",
+    "infra:down": "docker compose down",
+    "dev:api": "cd apps/api && ./gradlew bootRun",
+    "dev:api:watch": "cd apps/api && ./gradlew --continuous build -x test -x ktlintCheck -x detekt -x writeJooqEditorConfig",
+    "dev:web": "cd apps/web && pnpm dev",
+    "dev:all": "pnpm infra:up && wait-on tcp:55432 tcp:6379 tcp:8025 && concurrently --names api,api-watch,web --prefix-colors blue,gray,green --kill-others-on-fail \"pnpm dev:api\" \"pnpm dev:api:watch\" \"pnpm dev:web\""
   },
   "devDependencies": {
     "@commitlint/cli": "^19.0.0",
     "@commitlint/config-conventional": "^19.0.0",
-    "lefthook": "^1.7.0"
+    "concurrently": "^9.2.1",
+    "lefthook": "^1.7.0",
+    "wait-on": "^9.0.5"
   }
 }

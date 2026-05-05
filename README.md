@@ -9,7 +9,7 @@
 
 Operating room scheduling platform for medical clinics. Single-tenant SaaS that helps clinic staff manage operating rooms, surgeons, and bookings; later extends to a customer portal where surgeons can self-book available slots.
 
-**Status:** Sprint 0 — foundation in place; auth (Sprint 1) is next.
+**Status:** Sprint 1 done — auth (password + passkey + reset + change-password), CSRF, rate limit + exponential backoff, HIBP breach checks, audit log. Sprint 2 (booking core) in progress.
 **Author:** Oleksandr Izotov ([@oleksandr-izotov](https://github.com/oleksandr-izotov))
 **License:** MIT
 
@@ -34,26 +34,29 @@ mkcert -cert-file localhost.pem -key-file localhost-key.pem localhost 127.0.0.1 
 openssl pkcs12 -export -in localhost.pem -inkey localhost-key.pem -out localhost.p12 -name kliniq-api -password pass:changeit
 cd ..
 
-# 3. Start postgres / redis / mailpit
-docker compose up -d
-
-# 4. Install monorepo dependencies (lefthook hooks auto-install)
+# 3. Install monorepo dependencies (lefthook hooks auto-install)
 pnpm install
 
-# 5. Run backend (terminal A)
-cd apps/api && ./gradlew bootRun
-
-# 6. Run frontend (terminal B)
-cd apps/web && pnpm dev
+# 4. One command brings up infra + backend + frontend with combined logs
+pnpm dev:all
 ```
+
+`pnpm dev:all` brings up the docker stack, waits for postgres / redis / mailpit
+to be ready, then runs `gradle bootRun` (the Spring app), `gradle --continuous build`
+(re-compiles on save so Spring DevTools can hot-restart), and `vite dev` together
+under [`concurrently`](https://www.npmjs.com/package/concurrently). One Ctrl-C
+tears everything down.
 
 Then visit:
 
-- **<https://localhost:5173>** — frontend (Sprint 0 hello-world hits the API health endpoint)
+- **<https://localhost:5173>** — frontend (login + register + passkey-protected app)
 - **<https://localhost:8443/actuator/health>** — backend health
 - **<http://localhost:8025>** — Mailpit web UI (catches outgoing dev mail)
 
 If port 5432 is in use by a native postgres, our compose maps host port **55432** instead — config already accounts for this.
+
+If you'd rather run pieces by hand: `pnpm infra:up`, `pnpm dev:api`, `pnpm dev:web`,
+`pnpm infra:down`. See `package.json` for the full script list.
 
 ---
 
@@ -85,14 +88,15 @@ Read in this order to onboard:
 Executable sprint plans:
 
 - [`docs/sprints/SPRINT_0.md`](docs/sprints/SPRINT_0.md) — foundation **✓ done**
-- [`docs/sprints/SPRINT_1.md`](docs/sprints/SPRINT_1.md) — authentication (next)
+- [`docs/sprints/SPRINT_1.md`](docs/sprints/SPRINT_1.md) — authentication **✓ done**
+- [`docs/sprints/SPRINT_2.md`](docs/sprints/SPRINT_2.md) — booking core (in progress)
 
 ## Tech stack (V1)
 
 - **Backend:** Kotlin 2.1 · Spring Boot 3.5 · Java 21 LTS · Flyway · PostgreSQL 16 · Redis 7.4
 - **Frontend:** SvelteKit 2 · Svelte 5 · TypeScript 5 · Tailwind CSS v4 · shadcn-svelte
-- **Auth (Sprint 1):** Spring Security + cookie sessions in Redis + WebAuthn4J passkeys (no JWT)
-- **Tests:** JUnit 5 · Vitest · Playwright (E2E later)
+- **Auth:** Spring Security + cookie sessions in Redis + WebAuthn4J passkeys (no JWT) + HIBP breach checks + per-IP exponential backoff
+- **Tests:** JUnit 5 (60+ integration tests, 88.9% line coverage on the auth surface) · Vitest · Playwright (auth + passkey ceremonies via virtual authenticator)
 - **Local infra:** Docker Compose · Mailpit · mkcert
 - **CI:** GitHub Actions · gitleaks · commitlint · dependabot
 - **Deploy (deferred until V1 works locally):** Coolify on Hetzner CPX21
