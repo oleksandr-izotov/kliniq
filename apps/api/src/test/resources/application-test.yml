@@ -34,6 +34,19 @@ spring:
       mail.smtp.auth: false
       mail.smtp.starttls.enable: false
 
+# Override app.webauthn so WebAuthnProperties has values to bind. The
+# integration tests use Origin.create(...) against these origins, so any
+# value the production code accepts works — http://localhost is the
+# clearest "this is just a test fixture" choice.
+app:
+  webauthn:
+    rp-id: localhost
+    rp-name: Kliniq-Test
+    origins:
+      - http://localhost
+    challenge-ttl: 5m
+    ceremony-timeout: 60s
+
 logging:
   level:
     org.flywaydb: WARN

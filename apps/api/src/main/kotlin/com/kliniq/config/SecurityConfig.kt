@@ -44,6 +44,11 @@ class SecurityConfig {
                         "/api/v1/auth/logout",
                         "/api/v1/auth/password/forgot",
                         "/api/v1/auth/password/reset",
+                        // Passkey authentication ceremony is public by design —
+                        // the assertion *is* the proof. Registration/listing/
+                        // delete still require an authenticated session.
+                        "/api/v1/auth/passkeys/authentication/begin",
+                        "/api/v1/auth/passkeys/authentication/finish",
                     ).permitAll()
                 it.anyRequest().authenticated()
             }.addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)

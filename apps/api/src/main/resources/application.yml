@@ -25,6 +25,23 @@ app:
     base-url: https://localhost:5173
   mail:
     from: "no-reply@kliniq.local"
+  webauthn:
+    # Relying-party identity. rp-id MUST be a registrable suffix of every
+    # origin (no scheme, no port). For dev that's "localhost". In prod
+    # override via SPRING_APPLICATION_JSON or env to e.g. "kliniq.app".
+    rp-id: localhost
+    rp-name: Kliniq
+    # Origins the browser is allowed to start a ceremony from. Each must
+    # match the URL bar exactly (scheme + host + port).
+    origins:
+      - https://localhost:5173
+    # How long the SPA has to complete a ceremony before we drop the
+    # challenge from Redis. WebAuthn spec recommends ~60s for the browser
+    # timeout; we keep the server-side store a touch longer for clock skew.
+    challenge-ttl: 5m
+    # Browser-side timeout hint baked into the options JSON. The browser
+    # treats this as advisory.
+    ceremony-timeout: 60s
 
 server:
   port: 8443

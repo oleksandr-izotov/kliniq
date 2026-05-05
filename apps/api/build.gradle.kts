@@ -63,6 +63,11 @@ dependencies {
     // Argon2id password hashing
     implementation("de.mkammerer:argon2-jvm:2.11")
 
+    // WebAuthn / passkeys. webauthn4j-core gives us the registration and
+    // authentication ceremony validators; we wire the cookie-session flow
+    // around it ourselves rather than pulling in webauthn4j-spring-security.
+    implementation("com.webauthn4j:webauthn4j-core:0.29.1.RELEASE")
+
     // Kotlin runtime support
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
@@ -90,6 +95,10 @@ dependencies {
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
     testImplementation("org.springframework.security:spring-security-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    // Emulated authenticator + ClientPlatform helpers for full WebAuthn
+    // ceremonies in integration tests, no browser required.
+    testImplementation("com.webauthn4j:webauthn4j-test:0.29.1.RELEASE")
 }
 
 kotlin {
@@ -223,6 +232,15 @@ val writeJooqEditorConfig =
 tasks.named("generateJooq") {
     finalizedBy(writeJooqEditorConfig)
 }
+
+// ktlint walks every file under the source set, including the generated
+// jOOQ tree. Without an explicit dependency Gradle 8.x flags the implicit
+// ordering as a validation error when both run in the same invocation
+// (`./gradlew check`). Tying ktlint's main task to generateJooq matches
+// the real-world expectation: codegen must run first.
+tasks
+    .matching { it.name in setOf("runKtlintCheckOverMainSourceSet", "runKtlintFormatOverMainSourceSet") }
+    .configureEach { dependsOn("generateJooq", "writeJooqEditorConfig") }
 
 detekt {
     buildUponDefaultConfig = true

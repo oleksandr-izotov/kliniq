@@ -94,6 +94,13 @@ class RateLimitFilter(
                 "POST:/api/v1/auth/register" to Rule(5, Duration.ofMinutes(1)),
                 "POST:/api/v1/auth/login" to Rule(10, Duration.ofMinutes(1)),
                 "POST:/api/v1/auth/password/forgot" to Rule(3, Duration.ofMinutes(1)),
+                // Passkey ceremony endpoints. /begin is cheap (random bytes
+                // + Redis SET) so a generous quota is fine; /finish runs
+                // signature verification, so we tighten to login-class limits.
+                "POST:/api/v1/auth/passkeys/authentication/begin" to Rule(20, Duration.ofMinutes(1)),
+                "POST:/api/v1/auth/passkeys/authentication/finish" to Rule(10, Duration.ofMinutes(1)),
+                "POST:/api/v1/auth/passkeys/registration/begin" to Rule(10, Duration.ofMinutes(1)),
+                "POST:/api/v1/auth/passkeys/registration/finish" to Rule(10, Duration.ofMinutes(1)),
             )
     }
 }
