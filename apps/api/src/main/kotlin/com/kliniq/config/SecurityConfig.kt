@@ -4,6 +4,7 @@ import com.kliniq.infra.security.SessionAuthenticationFilter
 import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
@@ -50,6 +51,18 @@ class SecurityConfig {
                         "/api/v1/auth/passkeys/authentication/begin",
                         "/api/v1/auth/passkeys/authentication/finish",
                     ).permitAll()
+                // Operating-room write endpoints require MANAGER+ (or ADMIN).
+                // Reads stay open to any authenticated user — staff need to
+                // see the schedule.
+                it
+                    .requestMatchers(HttpMethod.POST, "/api/v1/operating-rooms")
+                    .hasAnyRole("MANAGER", "ADMIN")
+                it
+                    .requestMatchers(HttpMethod.PATCH, "/api/v1/operating-rooms/*")
+                    .hasAnyRole("MANAGER", "ADMIN")
+                it
+                    .requestMatchers(HttpMethod.DELETE, "/api/v1/operating-rooms/*")
+                    .hasAnyRole("MANAGER", "ADMIN")
                 it.anyRequest().authenticated()
             }.addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
             .exceptionHandling { ex ->
