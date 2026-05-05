@@ -95,6 +95,12 @@ class RateLimitFilter(
                 "POST:/api/v1/auth/passkeys/authentication/finish" to Rule(10, Duration.ofMinutes(1)),
                 "POST:/api/v1/auth/passkeys/registration/begin" to Rule(10, Duration.ofMinutes(1)),
                 "POST:/api/v1/auth/passkeys/registration/finish" to Rule(10, Duration.ofMinutes(1)),
+                // Booking writes — staff in a busy clinic plausibly create
+                // tens of bookings per minute during scheduling sessions, so
+                // generous-but-bounded.
+                "POST:/api/v1/bookings" to Rule(60, Duration.ofMinutes(1)),
+                // Operating-room writes are rarer.
+                "POST:/api/v1/operating-rooms" to Rule(30, Duration.ofMinutes(1)),
             )
     }
 }
