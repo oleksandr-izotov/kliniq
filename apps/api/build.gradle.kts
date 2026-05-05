@@ -24,6 +24,7 @@ plugins {
     // type-safe Kotlin code.
     id("org.flywaydb.flyway") version "10.20.1"
     id("nu.studer.jooq") version "9.0"
+    jacoco
 }
 
 group = "com.kliniq"
@@ -109,6 +110,30 @@ kotlin {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    finalizedBy(tasks.named<JacocoReport>("jacocoTestReport"))
+}
+
+// JaCoCo: aggregate coverage across the integration tests so we can
+// answer DoD claims like "auth packages > 70% coverage" with a real
+// number, not a vibe. Reports land in build/reports/jacoco/test/.
+tasks.named<JacocoReport>("jacocoTestReport") {
+    // generateJooq writes into build/classes paths that the report walks.
+    dependsOn(tasks.named("test"), tasks.named("writeJooqEditorConfig"))
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+    classDirectories.setFrom(
+        files(
+            classDirectories.files.map {
+                fileTree(it) {
+                    // jOOQ generated classes track the schema 1:1 — measuring
+                    // coverage on them tells us nothing about our own code.
+                    exclude("com/kliniq/db/**")
+                }
+            },
+        ),
+    )
 }
 
 // `gradle bootRun` should execute with the monorepo root as the working

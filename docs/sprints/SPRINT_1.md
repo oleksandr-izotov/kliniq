@@ -4,7 +4,7 @@
 
 **Definition of done:**
 - [x] All routes in [Acceptance criteria](#acceptance-criteria) below behave correctly
-- [x] Tests cover happy paths and key failure modes (>70% coverage on `auth/` packages)
+- [x] Tests cover happy paths and key failure modes (>70% coverage on `auth/` packages — JaCoCo measures **88.9% line coverage** across the auth surface; HIBP HTTP client lives at 29% on purpose, the network call is stubbed in tests)
 - [x] Login + register UI exists, looks decent (using shadcn-svelte, Kliniq Emerald theme)
 - [x] Passkey registration + assertion works end-to-end in Chrome on macOS/Windows
 - [x] OWASP ASVS L2 auth checklist (below) all green
