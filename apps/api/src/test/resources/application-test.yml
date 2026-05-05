@@ -39,6 +39,11 @@ spring:
 # value the production code accepts works — http://localhost is the
 # clearest "this is just a test fixture" choice.
 app:
+  security:
+    # Skip the breach API by default; tests that exercise the rejection
+    # path replace BreachedPasswordChecker with a Mockito stub.
+    breach-check:
+      enabled: false
   webauthn:
     rp-id: localhost
     rp-name: Kliniq-Test

@@ -25,6 +25,15 @@ app:
     base-url: https://localhost:5173
   mail:
     from: "no-reply@kliniq.local"
+  security:
+    breach-check:
+      # Reject candidate passwords that appear in HIBP's k-anonymity API.
+      # See ASVS V2.1.7. Disable explicitly only when running against a
+      # network-restricted environment that can't reach pwnedpasswords.com.
+      enabled: true
+      api-base: https://api.pwnedpasswords.com
+      timeout: 3s
+      user-agent: Kliniq
   webauthn:
     # Relying-party identity. rp-id MUST be a registrable suffix of every
     # origin (no scheme, no port). For dev that's "localhost". In prod

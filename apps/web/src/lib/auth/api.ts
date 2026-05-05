@@ -111,6 +111,10 @@ export const authApi = {
 		return apiRequest<ApiMessage>('POST', '/api/v1/auth/password/reset', { body: input });
 	},
 
+	changePassword(input: { currentPassword: string; newPassword: string }) {
+		return apiRequest<ApiMessage>('POST', '/api/v1/auth/password/change', { body: input });
+	},
+
 	/**
 	 * Round-trip a GET so Spring sets the `XSRF-TOKEN` cookie before the
 	 * SPA fires its first POST. Callers usually invoke this once on app load.

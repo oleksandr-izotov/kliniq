@@ -4,6 +4,7 @@ import com.kliniq.infra.audit.AuditEntry
 import com.kliniq.infra.audit.AuditWriter
 import com.kliniq.infra.security.PasswordHasher
 import com.kliniq.infra.security.SessionStore
+import com.kliniq.infra.security.breach.BreachedPasswordChecker
 import com.kliniq.persistence.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -21,12 +22,14 @@ import org.springframework.transaction.annotation.Transactional
  * can't reuse it.
  */
 @Service
+@Suppress("LongParameterList") // breach checker joins the orchestration neighbours
 class ResetPasswordUseCase(
     private val tokens: PasswordResetTokenService,
     private val users: UserRepository,
     private val passwordHasher: PasswordHasher,
     private val sessions: SessionStore,
     private val auditWriter: AuditWriter,
+    private val breachChecker: BreachedPasswordChecker,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -36,6 +39,13 @@ class ResetPasswordUseCase(
         plaintextToken: String,
         newPassword: String,
     ): Result {
+        // Reject breached passwords before consuming the token so a user
+        // who hits a bad password choice can simply pick a new one with
+        // the same email link, instead of having to start over.
+        if (breachChecker.isBreached(newPassword)) {
+            log.info("reset-password: candidate password rejected by breach check")
+            return Result.PasswordBreached
+        }
         val userId = tokens.consume(plaintextToken) ?: return Result.InvalidToken
         val newHash = passwordHasher.hash(newPassword)
         val updated = users.updatePasswordHash(userId, newHash)
@@ -65,5 +75,8 @@ class ResetPasswordUseCase(
         data object Success : Result
 
         data object InvalidToken : Result
+
+        /** New password is in HIBP's breach corpus — pick another. */
+        data object PasswordBreached : Result
     }
 }

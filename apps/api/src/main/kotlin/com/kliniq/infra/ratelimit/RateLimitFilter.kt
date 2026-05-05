@@ -1,5 +1,6 @@
 package com.kliniq.infra.ratelimit
 
+import com.kliniq.infra.security.clientIp
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -40,7 +41,7 @@ class RateLimitFilter(
             return
         }
 
-        val ip = clientIp(request)
+        val ip = request.clientIp()
         val key = "rate-limit:${request.method}:${request.requestURI}:$ip"
         val count = redis.opsForValue().increment(key) ?: 1
         if (count == 1L) {
@@ -55,17 +56,6 @@ class RateLimitFilter(
         }
         filterChain.doFilter(request, response)
     }
-
-    private fun clientIp(request: HttpServletRequest): String =
-        // X-Forwarded-For takes priority once we deploy behind a reverse proxy.
-        // In dev (mkcert + direct connection) request.remoteAddr is the truth.
-        request
-            .getHeader("X-Forwarded-For")
-            ?.split(",")
-            ?.firstOrNull()
-            ?.trim()
-            .takeUnless { it.isNullOrBlank() }
-            ?: request.remoteAddr ?: "unknown"
 
     private fun writeRateLimited(
         response: HttpServletResponse,
@@ -94,6 +84,10 @@ class RateLimitFilter(
                 "POST:/api/v1/auth/register" to Rule(5, Duration.ofMinutes(1)),
                 "POST:/api/v1/auth/login" to Rule(10, Duration.ofMinutes(1)),
                 "POST:/api/v1/auth/password/forgot" to Rule(3, Duration.ofMinutes(1)),
+                // /password/change is auth-required; capping per IP also
+                // throttles a session-stealing attacker probing the
+                // current-password requirement.
+                "POST:/api/v1/auth/password/change" to Rule(10, Duration.ofMinutes(1)),
                 // Passkey ceremony endpoints. /begin is cheap (random bytes
                 // + Redis SET) so a generous quota is fine; /finish runs
                 // signature verification, so we tighten to login-class limits.

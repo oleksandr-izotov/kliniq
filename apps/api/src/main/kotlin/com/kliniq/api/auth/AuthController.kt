@@ -2,7 +2,10 @@ package com.kliniq.api.auth
 
 import com.kliniq.api.error.ApiErrorResponse
 import com.kliniq.infra.security.KliniqAuthentication
+import com.kliniq.infra.security.LoginAttemptTracker
 import com.kliniq.infra.security.SessionCookieService
+import com.kliniq.infra.security.clientIp
+import com.kliniq.usecase.auth.ChangePasswordUseCase
 import com.kliniq.usecase.auth.ForgotPasswordUseCase
 import com.kliniq.usecase.auth.LoginUseCase
 import com.kliniq.usecase.auth.LogoutUseCase
@@ -32,27 +35,44 @@ class AuthController(
     private val logoutUseCase: LogoutUseCase,
     private val forgotPasswordUseCase: ForgotPasswordUseCase,
     private val resetPasswordUseCase: ResetPasswordUseCase,
+    private val changePasswordUseCase: ChangePasswordUseCase,
     private val cookies: SessionCookieService,
+    private val loginAttempts: LoginAttemptTracker,
+    private val clock: java.time.Clock,
 ) {
     /**
-     * Always returns 200 with a neutral message — never reveals whether the
-     * email already exists. The use case decides internally.
+     * Returns 200 with a neutral message on success — never reveals whether
+     * the email already exists. Returns 400 PASSWORD_BREACHED only when the
+     * candidate password fails the breach check; that rejection is
+     * independent of email state and so doesn't leak user existence.
      */
     @PostMapping("/register")
-    @ResponseStatus(HttpStatus.OK)
     fun register(
         @Valid @RequestBody request: RegisterRequest,
-    ): MessageResponse {
-        registerUseCase.register(
-            RegisterUseCase.RegisterCommand(
-                email = request.email.trim(),
-                password = request.password,
-                displayName = request.displayName.trim(),
-            ),
-        )
-        return MessageResponse(
-            message = "If this email is available, a verification link is on its way.",
-        )
+    ): ResponseEntity<*> {
+        val result =
+            registerUseCase.register(
+                RegisterUseCase.RegisterCommand(
+                    email = request.email.trim(),
+                    password = request.password,
+                    displayName = request.displayName.trim(),
+                ),
+            )
+        return when (result) {
+            RegisterUseCase.Result.Accepted ->
+                ResponseEntity.ok(
+                    MessageResponse("If this email is available, a verification link is on its way."),
+                )
+            RegisterUseCase.Result.PasswordBreached ->
+                ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                    ApiErrorResponse(
+                        code = "PASSWORD_BREACHED",
+                        message =
+                            "This password has appeared in a known data breach. " +
+                                "Choose a different one.",
+                    ),
+                )
+        }
     }
 
     @PostMapping("/verify")
@@ -74,20 +94,50 @@ class AuthController(
     @PostMapping("/login")
     fun login(
         @Valid @RequestBody request: LoginRequest,
+        httpRequest: HttpServletRequest,
         response: HttpServletResponse,
-    ): ResponseEntity<*> =
-        when (val result = loginUseCase.login(request.email.trim(), request.password)) {
+    ): ResponseEntity<*> {
+        val ip = httpRequest.clientIp()
+
+        // Exponential backoff (ASVS V13.2.6) — kicks in BEFORE the use case
+        // so a doomed attempt doesn't even spend an Argon2 verification.
+        val now = clock.instant()
+        val nextAllowed = loginAttempts.nextAllowedAt(ip)
+        if (now.isBefore(nextAllowed)) {
+            val retryAfterSeconds =
+                java.time.Duration
+                    .between(now, nextAllowed)
+                    .seconds
+                    .coerceAtLeast(1)
+            return ResponseEntity
+                .status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", retryAfterSeconds.toString())
+                .body(
+                    ApiErrorResponse(
+                        code = "LOGIN_BACKOFF",
+                        message = "Too many failed sign-in attempts. Try again shortly.",
+                    ),
+                )
+        }
+
+        return when (val result = loginUseCase.login(request.email.trim(), request.password)) {
             is LoginUseCase.Result.Success -> {
+                loginAttempts.recordSuccess(ip)
                 cookies.write(response, result.session.id)
                 ResponseEntity.ok(UserResponse.of(result.user))
             }
-            LoginUseCase.Result.InvalidCredentials ->
-                ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
-                    ApiErrorResponse(
-                        code = "INVALID_CREDENTIALS",
-                        message = "Email or password is incorrect.",
-                    ),
-                )
+            LoginUseCase.Result.InvalidCredentials -> {
+                val retryAfterSeconds = loginAttempts.recordFailure(ip)
+                ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .header("Retry-After", retryAfterSeconds.toString())
+                    .body(
+                        ApiErrorResponse(
+                            code = "INVALID_CREDENTIALS",
+                            message = "Email or password is incorrect.",
+                        ),
+                    )
+            }
             LoginUseCase.Result.EmailNotVerified ->
                 ResponseEntity.status(HttpStatus.FORBIDDEN).body(
                     ApiErrorResponse(
@@ -103,6 +153,7 @@ class AuthController(
                     ),
                 )
         }
+    }
 
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.OK)
@@ -131,6 +182,71 @@ class AuthController(
         )
     }
 
+    /**
+     * In-app password change. Authenticated; requires the current password
+     * to be presented again (V3.7.1). Other sessions belonging to this
+     * user are terminated; the current one stays alive.
+     */
+    @PostMapping("/password/change")
+    fun changePassword(
+        @Valid @RequestBody request: ChangePasswordRequest,
+    ): ResponseEntity<*> {
+        val auth =
+            SecurityContextHolder.getContext().authentication as? KliniqAuthentication
+                ?: error("authenticated endpoint reached without KliniqAuthentication")
+        return when (
+            val result =
+                changePasswordUseCase.change(
+                    userId = auth.user.id,
+                    currentSessionId = auth.session.id,
+                    currentPassword = request.currentPassword,
+                    newPassword = request.newPassword,
+                )
+        ) {
+            is ChangePasswordUseCase.Result.Success ->
+                ResponseEntity.ok(
+                    MessageResponse(
+                        if (result.otherSessionsTerminated == 0) {
+                            "Password updated."
+                        } else {
+                            "Password updated. ${result.otherSessionsTerminated} other " +
+                                "device${if (result.otherSessionsTerminated == 1) "" else "s"} signed out."
+                        },
+                    ),
+                )
+            ChangePasswordUseCase.Result.IncorrectCurrentPassword ->
+                ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                    ApiErrorResponse(
+                        code = "INVALID_CREDENTIALS",
+                        message = "The current password is incorrect.",
+                    ),
+                )
+            ChangePasswordUseCase.Result.PasswordBreached ->
+                ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                    ApiErrorResponse(
+                        code = "PASSWORD_BREACHED",
+                        message =
+                            "This password has appeared in a known data breach. " +
+                                "Choose a different one.",
+                    ),
+                )
+            ChangePasswordUseCase.Result.SamePassword ->
+                ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                    ApiErrorResponse(
+                        code = "SAME_PASSWORD",
+                        message = "The new password must differ from the current one.",
+                    ),
+                )
+            ChangePasswordUseCase.Result.PasskeyOnlyAccount ->
+                ResponseEntity.status(HttpStatus.CONFLICT).body(
+                    ApiErrorResponse(
+                        code = "NO_PASSWORD",
+                        message = "This account has no password to change. Use the reset link instead.",
+                    ),
+                )
+        }
+    }
+
     @PostMapping("/password/reset")
     fun resetPassword(
         @Valid @RequestBody request: ResetPasswordRequest,
@@ -140,9 +256,18 @@ class AuthController(
                 ResponseEntity.ok(MessageResponse("Password updated. You can sign in with your new password."))
             ResetPasswordUseCase.Result.InvalidToken ->
                 ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                    com.kliniq.api.error.ApiErrorResponse(
+                    ApiErrorResponse(
                         code = "INVALID_TOKEN",
                         message = "This reset link is invalid or has expired.",
+                    ),
+                )
+            ResetPasswordUseCase.Result.PasswordBreached ->
+                ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                    ApiErrorResponse(
+                        code = "PASSWORD_BREACHED",
+                        message =
+                            "This password has appeared in a known data breach. " +
+                                "Choose a different one.",
                     ),
                 )
         }

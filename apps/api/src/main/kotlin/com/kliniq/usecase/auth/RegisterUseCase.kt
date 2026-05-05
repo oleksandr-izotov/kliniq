@@ -7,6 +7,7 @@ import com.kliniq.infra.audit.AuditEntry
 import com.kliniq.infra.audit.AuditWriter
 import com.kliniq.infra.mail.EmailSender
 import com.kliniq.infra.security.PasswordHasher
+import com.kliniq.infra.security.breach.BreachedPasswordChecker
 import com.kliniq.persistence.user.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -32,6 +33,7 @@ class RegisterUseCase(
     private val emailSender: EmailSender,
     private val auditWriter: AuditWriter,
     private val tx: TransactionTemplate,
+    private val breachChecker: BreachedPasswordChecker,
     @Value("\${app.web.base-url}") private val webBaseUrl: String,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -42,9 +44,32 @@ class RegisterUseCase(
         val displayName: String,
     )
 
-    fun register(cmd: RegisterCommand) {
+    sealed interface Result {
+        /**
+         * Returned for both success and "email already in use" — the API
+         * doesn't distinguish them on the wire (ASVS V2.5.4).
+         */
+        data object Accepted : Result
+
+        /**
+         * The candidate password appears in a known breach corpus.
+         * Reported to the user explicitly because the rejection is about
+         * the password itself and reveals nothing about email state.
+         */
+        data object PasswordBreached : Result
+    }
+
+    fun register(cmd: RegisterCommand): Result {
+        // Check the breach corpus before any DB write so the rejection is
+        // independent of whether the email is taken. That keeps V2.5.4
+        // (don't reveal user existence) intact.
+        if (breachChecker.isBreached(cmd.password)) {
+            log.info("register: candidate password rejected by breach check")
+            return Result.PasswordBreached
+        }
         val pending = tx.execute { createUserIfNew(cmd) }
         pending?.let { dispatchVerification(it) }
+        return Result.Accepted
     }
 
     private fun createUserIfNew(cmd: RegisterCommand): PendingVerification? {

@@ -46,8 +46,8 @@
 				to the login page automatically.
 			</p>
 			<div class="flex items-center justify-between">
-				<a href="/settings/passkeys" class="text-sm font-medium text-primary hover:underline">
-					Manage passkeys →
+				<a href="/settings/security" class="text-sm font-medium text-primary hover:underline">
+					Security settings →
 				</a>
 				<Button variant="outline" onclick={logout} disabled={signingOut}>
 					{signingOut ? 'Signing out…' : 'Sign out'}

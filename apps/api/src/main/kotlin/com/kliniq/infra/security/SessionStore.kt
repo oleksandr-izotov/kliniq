@@ -29,6 +29,17 @@ interface SessionStore {
 
     /** Logout-everywhere primitive used by password reset and admin actions. */
     fun invalidateAllForUser(userId: UUID): Int
+
+    /**
+     * Invalidate every session for [userId] *except* [exceptSessionId].
+     * Used by in-app password change so the user keeps the device they're
+     * actively typing on while every other device gets booted (V3.7.1).
+     * Returns the number of sessions killed.
+     */
+    fun invalidateAllForUserExcept(
+        userId: UUID,
+        exceptSessionId: String,
+    ): Int
 }
 
 @Component
@@ -87,6 +98,21 @@ class RedisSessionStore(
         val keys = sessionIds.map(::sessionKey) + indexKey
         redis.delete(keys)
         return sessionIds.size
+    }
+
+    override fun invalidateAllForUserExcept(
+        userId: UUID,
+        exceptSessionId: String,
+    ): Int {
+        val indexKey = userIndexKey(userId)
+        val sessionIds = redis.opsForSet().members(indexKey) ?: emptySet()
+        val toKill = sessionIds - exceptSessionId
+        if (toKill.isEmpty()) return 0
+        redis.delete(toKill.map(::sessionKey))
+        // Drop the killed ids from the user index so it stays accurate.
+        @Suppress("SpreadOperator") // Spring Data Redis exposes only a varargs API for SREM
+        redis.opsForSet().remove(indexKey, *toKill.toTypedArray())
+        return toKill.size
     }
 
     private fun sessionKey(id: String) = "$SESSION_PREFIX$id"

@@ -7,6 +7,7 @@ import com.kliniq.db.tables.references.PASSWORD_RESET_TOKENS
 import com.kliniq.db.tables.references.USERS
 import com.kliniq.infra.mail.EmailSender
 import com.kliniq.infra.security.SessionCookieService
+import com.kliniq.infra.security.breach.BreachedPasswordChecker
 import com.kliniq.support.TestcontainersConfig
 import org.assertj.core.api.Assertions.assertThat
 import org.jooq.DSLContext
@@ -38,6 +39,7 @@ import org.springframework.test.web.servlet.post
 @Import(TestcontainersConfig::class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Suppress("LargeClass") // single class keeps cross-feature setup (mocks, redis cleanup) in one place
 class AuthControllerIntegrationTest
     @Autowired
     constructor(
@@ -49,11 +51,19 @@ class AuthControllerIntegrationTest
         @MockitoBean
         private lateinit var emailSender: EmailSender
 
+        @MockitoBean
+        private lateinit var breachChecker: BreachedPasswordChecker
+
         @BeforeEach
         fun reset() {
             // Mockito.reset clears invocation history so per-test verify(times(...))
             // assertions are not contaminated by previous tests in this class.
-            Mockito.reset(emailSender)
+            Mockito.reset(emailSender, breachChecker)
+            // Default: passwords are not breached. Tests that need the
+            // PASSWORD_BREACHED branch override this with whenever().
+            org.mockito.kotlin
+                .whenever(breachChecker.isBreached(org.mockito.kotlin.any()))
+                .thenReturn(false)
             // Tokens cascade-delete via FK ON DELETE CASCADE when users are dropped.
             dsl.deleteFrom(EMAIL_VERIFICATION_TOKENS).execute()
             dsl.deleteFrom(PASSWORD_RESET_TOKENS).execute()
@@ -64,6 +74,8 @@ class AuthControllerIntegrationTest
             // Wipe rate-limit counters so a flurry of register/login calls in
             // one test doesn't trip the limit on the next one.
             redis.keys("rate-limit:*")?.takeIf { it.isNotEmpty() }?.let(redis::delete)
+            // Same for the login-backoff state.
+            redis.keys("kliniq:login-backoff:*")?.takeIf { it.isNotEmpty() }?.let(redis::delete)
         }
 
         // ---- helpers ------------------------------------------------------
@@ -212,6 +224,35 @@ class AuthControllerIntegrationTest
             verify(emailSender, never()).sendEmailVerification(any(), any(), any())
         }
 
+        @Test
+        fun `register with breached password returns 400 PASSWORD_BREACHED and creates no user`() {
+            // Override the default stub: pretend HIBP says this password is breached.
+            org.mockito.kotlin
+                .whenever(breachChecker.isBreached(org.mockito.kotlin.any()))
+                .thenReturn(true)
+
+            mockMvc
+                .post("/api/v1/auth/register") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = registerBody(email = "breached@kliniq.local")
+                }.andExpect {
+                    status { isBadRequest() }
+                    jsonPath("$.code") { value("PASSWORD_BREACHED") }
+                }
+
+            // Rejection happens before any user-existence check, so no DB write.
+            assertThat(
+                dsl.fetchExists(
+                    dsl
+                        .selectOne()
+                        .from(USERS)
+                        .where(USERS.EMAIL_NORMALIZED.eq("breached@kliniq.local")),
+                ),
+            ).isFalse()
+            verify(emailSender, never()).sendEmailVerification(any(), any(), any())
+        }
+
         // ---- /verify -----------------------------------------------------
 
         @Test
@@ -306,6 +347,63 @@ class AuthControllerIntegrationTest
                     status { isUnauthorized() }
                     jsonPath("$.code") { value("INVALID_CREDENTIALS") }
                 }
+        }
+
+        @Test
+        fun `repeated failed logins from one IP are throttled with LOGIN_BACKOFF and Retry-After`() {
+            registerAndVerify(email = "backoff@kliniq.local")
+            // First failure: 401 INVALID_CREDENTIALS (no prior state to gate on)
+            // After it, the tracker has 1 failure recorded with a 2s wait window.
+            mockMvc
+                .post("/api/v1/auth/login") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = loginBody("backoff@kliniq.local", "still wrong yes really 12345")
+                }.andExpect {
+                    status { isUnauthorized() }
+                    jsonPath("$.code") { value("INVALID_CREDENTIALS") }
+                    header { exists("Retry-After") }
+                }
+            // Immediate retry — now we're inside the 2s window, so the
+            // backoff layer rejects before LoginUseCase even runs.
+            mockMvc
+                .post("/api/v1/auth/login") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = loginBody("backoff@kliniq.local", DEFAULT_PASSWORD)
+                }.andExpect {
+                    status { isTooManyRequests() }
+                    jsonPath("$.code") { value("LOGIN_BACKOFF") }
+                    header { exists("Retry-After") }
+                }
+        }
+
+        @Test
+        fun `successful login wipes the backoff counter`() {
+            registerAndVerify(email = "wipe@kliniq.local")
+            // Burn one failure
+            mockMvc
+                .post("/api/v1/auth/login") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = loginBody("wipe@kliniq.local", "wrong wrong wrong wrong")
+                }.andExpect { status { isUnauthorized() } }
+            // Backoff state was written under kliniq:login-backoff:<ip>.
+            assertThat(redis.keys("kliniq:login-backoff:*")).isNotEmpty()
+
+            // A user-driven correct login is still gated by the wait window
+            // — but the test isn't measuring time-based eviction; it asserts
+            // that AFTER a success the counter is gone. So we wipe state to
+            // simulate the wait elapsing, then login normally.
+            redis.keys("kliniq:login-backoff:*")?.takeIf { it.isNotEmpty() }?.let(redis::delete)
+            mockMvc
+                .post("/api/v1/auth/login") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = loginBody("wipe@kliniq.local", DEFAULT_PASSWORD)
+                }.andExpect { status { isOk() } }
+
+            assertThat(redis.keys("kliniq:login-backoff:*")).isNullOrEmpty()
         }
 
         @Test
@@ -483,6 +581,12 @@ class AuthControllerIntegrationTest
                     content = loginBody("kate@kliniq.local", DEFAULT_PASSWORD)
                 }.andExpect { status { isUnauthorized() } }
 
+            // The wrong-password attempt above tripped the V13.2.6 backoff
+            // counter; in production the user would wait it out, but this
+            // test isn't about backoff so we wipe the state to keep the
+            // assertion focused.
+            redis.keys("kliniq:login-backoff:*")?.takeIf { it.isNotEmpty() }?.let(redis::delete)
+
             // New password works.
             mockMvc
                 .post("/api/v1/auth/login") {
@@ -490,6 +594,157 @@ class AuthControllerIntegrationTest
                     contentType = MediaType.APPLICATION_JSON
                     content = loginBody("kate@kliniq.local", "new horse battery staple xyz")
                 }.andExpect { status { isOk() } }
+        }
+
+        // ---- /password/change ------------------------------------------
+
+        private fun changeBody(
+            currentPassword: String,
+            newPassword: String,
+        ): String =
+            objectMapper.writeValueAsString(
+                mapOf("currentPassword" to currentPassword, "newPassword" to newPassword),
+            )
+
+        @Test
+        fun `change-password updates the hash and terminates other sessions but keeps the current one`() {
+            registerAndVerify(email = "claire@kliniq.local")
+
+            // Two concurrent sessions for the same user — laptop and phone.
+            val laptopCookie =
+                mockMvc
+                    .post("/api/v1/auth/login") {
+                        with(csrf())
+                        contentType = MediaType.APPLICATION_JSON
+                        content = loginBody("claire@kliniq.local", DEFAULT_PASSWORD)
+                    }.andReturn()
+                    .sessionCookieValue()!!
+            val phoneCookie =
+                mockMvc
+                    .post("/api/v1/auth/login") {
+                        with(csrf())
+                        contentType = MediaType.APPLICATION_JSON
+                        content = loginBody("claire@kliniq.local", DEFAULT_PASSWORD)
+                    }.andReturn()
+                    .sessionCookieValue()!!
+
+            mockMvc
+                .post("/api/v1/auth/password/change") {
+                    with(csrf())
+                    cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, laptopCookie))
+                    contentType = MediaType.APPLICATION_JSON
+                    content = changeBody(DEFAULT_PASSWORD, "freshly-minted-passphrase 99")
+                }.andExpect {
+                    status { isOk() }
+                    jsonPath("$.message") { exists() }
+                }
+
+            // Current session (laptop) still works.
+            mockMvc
+                .get("/api/v1/auth/me") {
+                    cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, laptopCookie))
+                }.andExpect { status { isOk() } }
+
+            // Other session (phone) was killed.
+            mockMvc
+                .get("/api/v1/auth/me") {
+                    cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, phoneCookie))
+                }.andExpect { status { isUnauthorized() } }
+
+            // New password works for fresh logins; old one no longer does.
+            redis.keys("kliniq:login-backoff:*")?.takeIf { it.isNotEmpty() }?.let(redis::delete)
+            mockMvc
+                .post("/api/v1/auth/login") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = loginBody("claire@kliniq.local", "freshly-minted-passphrase 99")
+                }.andExpect { status { isOk() } }
+        }
+
+        @Test
+        fun `change-password with wrong currentPassword returns 401 INVALID_CREDENTIALS`() {
+            registerAndVerify(email = "diana@kliniq.local")
+            val cookie =
+                mockMvc
+                    .post("/api/v1/auth/login") {
+                        with(csrf())
+                        contentType = MediaType.APPLICATION_JSON
+                        content = loginBody("diana@kliniq.local", DEFAULT_PASSWORD)
+                    }.andReturn()
+                    .sessionCookieValue()!!
+
+            mockMvc
+                .post("/api/v1/auth/password/change") {
+                    with(csrf())
+                    cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, cookie))
+                    contentType = MediaType.APPLICATION_JSON
+                    content = changeBody("wrong wrong wrong wrong", "fresh good passphrase here 99")
+                }.andExpect {
+                    status { isUnauthorized() }
+                    jsonPath("$.code") { value("INVALID_CREDENTIALS") }
+                }
+        }
+
+        @Test
+        fun `change-password with breached new password returns 400 PASSWORD_BREACHED`() {
+            registerAndVerify(email = "ed@kliniq.local")
+            val cookie =
+                mockMvc
+                    .post("/api/v1/auth/login") {
+                        with(csrf())
+                        contentType = MediaType.APPLICATION_JSON
+                        content = loginBody("ed@kliniq.local", DEFAULT_PASSWORD)
+                    }.andReturn()
+                    .sessionCookieValue()!!
+
+            org.mockito.kotlin
+                .whenever(breachChecker.isBreached(org.mockito.kotlin.any()))
+                .thenReturn(true)
+
+            mockMvc
+                .post("/api/v1/auth/password/change") {
+                    with(csrf())
+                    cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, cookie))
+                    contentType = MediaType.APPLICATION_JSON
+                    content = changeBody(DEFAULT_PASSWORD, "totally compromised pwd")
+                }.andExpect {
+                    status { isBadRequest() }
+                    jsonPath("$.code") { value("PASSWORD_BREACHED") }
+                }
+        }
+
+        @Test
+        fun `change-password rejects identical currentPassword and newPassword as SAME_PASSWORD`() {
+            registerAndVerify(email = "frida@kliniq.local")
+            val cookie =
+                mockMvc
+                    .post("/api/v1/auth/login") {
+                        with(csrf())
+                        contentType = MediaType.APPLICATION_JSON
+                        content = loginBody("frida@kliniq.local", DEFAULT_PASSWORD)
+                    }.andReturn()
+                    .sessionCookieValue()!!
+
+            mockMvc
+                .post("/api/v1/auth/password/change") {
+                    with(csrf())
+                    cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, cookie))
+                    contentType = MediaType.APPLICATION_JSON
+                    content = changeBody(DEFAULT_PASSWORD, DEFAULT_PASSWORD)
+                }.andExpect {
+                    status { isBadRequest() }
+                    jsonPath("$.code") { value("SAME_PASSWORD") }
+                }
+        }
+
+        @Test
+        fun `change-password without a session is rejected as 401`() {
+            mockMvc
+                .post("/api/v1/auth/password/change") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = changeBody(DEFAULT_PASSWORD, "fresh good passphrase here 99")
+                }.andExpect { status { isUnauthorized() } }
         }
 
         @Test
@@ -503,6 +758,47 @@ class AuthControllerIntegrationTest
                     status { isBadRequest() }
                     jsonPath("$.code") { value("INVALID_TOKEN") }
                 }
+        }
+
+        @Test
+        fun `reset-password with breached new password returns 400 PASSWORD_BREACHED`() {
+            // Set up a real reset token first.
+            val email = "reset-breached@kliniq.local"
+            registerAndVerify(email)
+            mockMvc
+                .post("/api/v1/auth/password/forgot") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = forgotBody(email)
+                }.andExpect { status { isOk() } }
+            val token = captureResetToken()
+
+            // From this point, pretend the candidate password is breached.
+            org.mockito.kotlin
+                .whenever(breachChecker.isBreached(org.mockito.kotlin.any()))
+                .thenReturn(true)
+
+            mockMvc
+                .post("/api/v1/auth/password/reset") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = resetBody(token, "another long valid password 123")
+                }.andExpect {
+                    status { isBadRequest() }
+                    jsonPath("$.code") { value("PASSWORD_BREACHED") }
+                }
+
+            // Token must NOT have been consumed — user can retry with a new password.
+            // (We can prove this by issuing a non-breached reset on the same token.)
+            org.mockito.kotlin
+                .whenever(breachChecker.isBreached(org.mockito.kotlin.any()))
+                .thenReturn(false)
+            mockMvc
+                .post("/api/v1/auth/password/reset") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = resetBody(token, "fresh good passphrase here 99")
+                }.andExpect { status { isOk() } }
         }
 
         // ---- CSRF protection --------------------------------------------

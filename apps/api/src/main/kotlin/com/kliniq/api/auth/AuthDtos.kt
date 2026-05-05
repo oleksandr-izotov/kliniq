@@ -66,6 +66,15 @@ data class ResetPasswordRequest(
     val newPassword: String,
 )
 
+data class ChangePasswordRequest(
+    @field:NotBlank
+    @field:Size(min = 1, max = RegisterRequest.MAX_PASSWORD)
+    val currentPassword: String,
+    @field:NotBlank
+    @field:Size(min = RegisterRequest.MIN_PASSWORD, max = RegisterRequest.MAX_PASSWORD)
+    val newPassword: String,
+)
+
 data class MessageResponse(
     val message: String,
 )
