@@ -21,6 +21,14 @@ interface UserRepository {
     fun existsByEmail(email: String): Boolean
 
     /**
+     * Returns active surgeons (is_surgeon = true, status = ACTIVE), ordered by
+     * display name. Used by the booking modal's surgeon picker. Disabled
+     * surgeons stay hidden so the SPA can't offer a row that the booking
+     * use case would reject anyway.
+     */
+    fun findActiveSurgeons(): List<User>
+
+    /**
      * Stamp `email_verified_at` on the row. Returns true if a row was actually
      * updated (i.e. the user existed and wasn't already verified — we don't
      * overwrite an existing timestamp so audit history stays clean).

@@ -55,6 +55,14 @@ class JooqUserRepository(
                 .where(USERS.EMAIL_NORMALIZED.eq(email.lowercase())),
         )
 
+    override fun findActiveSurgeons(): List<User> =
+        dsl
+            .selectFrom(USERS)
+            .where(USERS.IS_SURGEON.isTrue)
+            .and(USERS.STATUS.eq(UserStatus.ACTIVE.name))
+            .orderBy(USERS.DISPLAY_NAME.asc())
+            .fetch { it.toDomain() }
+
     override fun markEmailVerified(
         id: UUID,
         verifiedAt: OffsetDateTime,
