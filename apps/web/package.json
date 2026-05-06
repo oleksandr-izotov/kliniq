@@ -14,7 +14,8 @@
 		"format": "prettier --write .",
 		"test:unit": "vitest",
 		"test": "npm run test:unit -- --run && npm run test:e2e",
-		"test:e2e": "playwright install && playwright test"
+		"test:e2e": "playwright install && playwright test",
+		"gen:api": "openapi-typescript https://localhost:8443/v3/api-docs -o src/lib/api/generated.ts --immutable --properties-required-by-default"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",
@@ -33,6 +34,7 @@
 		"eslint-plugin-svelte": "^3.17.0",
 		"globals": "^17.4.0",
 		"mode-watcher": "^1.1.0",
+		"openapi-typescript": "^7.13.0",
 		"prettier": "^3.8.1",
 		"prettier-plugin-svelte": "^3.5.1",
 		"prettier-plugin-tailwindcss": "^0.7.2",

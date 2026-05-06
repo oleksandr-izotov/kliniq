@@ -72,6 +72,20 @@ management:
     git:
       enabled: false
 
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    # OpenAPI 3.1 emits null-aware schemas (Kotlin nullable -> "type": ["string", "null"]),
+    # which openapi-typescript's --immutable + --properties-required-by-default
+    # mode round-trips much more cleanly than 3.0's nullable: true side-channel.
+    version: openapi_3_1
+  swagger-ui:
+    path: /swagger-ui.html
+    # Surface only our endpoints, skip /actuator and the springdoc plumbing itself.
+    operations-sorter: method
+  paths-to-match:
+    - /api/v1/**
+
 logging:
   level:
     root: INFO

@@ -29,6 +29,7 @@ import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler
 @Configuration
 class SecurityConfig {
     @Bean
+    @Suppress("LongMethod") // one configuration block; collected at one site for readability
     fun securityFilterChain(
         http: HttpSecurity,
         sessionAuthenticationFilter: SessionAuthenticationFilter,
@@ -37,6 +38,17 @@ class SecurityConfig {
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
                 it.requestMatchers(EndpointRequest.to("health", "info")).permitAll()
+                // OpenAPI spec + Swagger UI are public so `pnpm gen:api`
+                // and developer browsing don't need a session. The spec
+                // itself is harmless — every endpoint route would be
+                // discoverable by reading the SPA bundle anyway.
+                it
+                    .requestMatchers(
+                        "/v3/api-docs",
+                        "/v3/api-docs/**",
+                        "/swagger-ui.html",
+                        "/swagger-ui/**",
+                    ).permitAll()
                 it
                     .requestMatchers(
                         "/api/v1/auth/register",

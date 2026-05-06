@@ -69,6 +69,12 @@ dependencies {
     // around it ourselves rather than pulling in webauthn4j-spring-security.
     implementation("com.webauthn4j:webauthn4j-core:0.29.1.RELEASE")
 
+    // OpenAPI 3.1 emit at /v3/api-docs + Swagger UI at /swagger-ui.html.
+    // Auto-discovers controllers + DTOs; the SPA generates its types from
+    // the served spec via `pnpm gen:api`, retiring the hand-mirrored DTOs
+    // flagged in the Sprint 1 retro.
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
+
     // DevTools restarts the running app when build/classes/ changes.
     // Pair with `./gradlew --continuous build` in another terminal (or
     // IntelliJ's auto-build) for hot Kotlin reload — `pnpm dev:all`

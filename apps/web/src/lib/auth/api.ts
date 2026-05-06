@@ -1,3 +1,4 @@
+import type { Schemas } from '../api';
 import { readCsrfToken, withCsrfHeader } from './csrf';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -10,28 +11,22 @@ function hasCsrfCookie(): boolean {
 	return readCsrfToken() !== null;
 }
 
+/* -----------------------------------------------------------------------------
+ * Wire types — generated from the backend's OpenAPI spec at /v3/api-docs and
+ * re-exported under the names existing call sites already use. The
+ * generator runs on demand via `pnpm gen:api`; it's not in the build
+ * pipeline because that would couple `pnpm build` to a running backend.
+ * -------------------------------------------------------------------------- */
+
+export type ApiUser = Schemas['UserResponse'];
+export type ApiMessage = Schemas['MessageResponse'];
+
 /**
- * Wire types for our `/api/v1/auth/*` endpoints. Hand-written for V1; we'll
- * generate them from OpenAPI in a later sprint when the backend exposes a
- * stable spec.
+ * Error envelope returned by every endpoint that surfaces a friendly
+ * code. springdoc renders `ResponseEntity<*>` as a generic shape, so this
+ * one is hand-written — it matches `com.kliniq.api.error.ApiErrorResponse`
+ * on the backend.
  */
-
-export interface ApiUser {
-	id: string;
-	email: string;
-	displayName: string;
-	role: 'ADMIN' | 'MANAGER' | 'STAFF';
-	isSurgeon: boolean;
-	specialty: 'CARDIOLOGY' | 'ORTHOPEDICS' | 'GENERAL' | 'NEUROSURGERY' | 'OPHTHALMOLOGY' | null;
-	status: 'ACTIVE' | 'DISABLED';
-	emailVerifiedAt: string | null;
-	createdAt: string;
-}
-
-export interface ApiMessage {
-	message: string;
-}
-
 export interface ApiError {
 	code: string;
 	message: string;
@@ -107,15 +102,15 @@ export async function apiRequest<T>(method: string, path: string, init: JsonInit
  * -------------------------------------------------------------------------- */
 
 export const authApi = {
-	register(input: { email: string; password: string; displayName: string }) {
+	register(input: Schemas['RegisterRequest']) {
 		return apiRequest<ApiMessage>('POST', '/api/v1/auth/register', { body: input });
 	},
 
-	verify(input: { token: string }) {
+	verify(input: Schemas['VerifyRequest']) {
 		return apiRequest<ApiMessage>('POST', '/api/v1/auth/verify', { body: input });
 	},
 
-	login(input: { email: string; password: string }) {
+	login(input: Schemas['LoginRequest']) {
 		return apiRequest<ApiUser>('POST', '/api/v1/auth/login', { body: input });
 	},
 
@@ -127,15 +122,15 @@ export const authApi = {
 		return apiRequest<ApiUser>('GET', '/api/v1/auth/me', {});
 	},
 
-	forgotPassword(input: { email: string }) {
+	forgotPassword(input: Schemas['ForgotPasswordRequest']) {
 		return apiRequest<ApiMessage>('POST', '/api/v1/auth/password/forgot', { body: input });
 	},
 
-	resetPassword(input: { token: string; newPassword: string }) {
+	resetPassword(input: Schemas['ResetPasswordRequest']) {
 		return apiRequest<ApiMessage>('POST', '/api/v1/auth/password/reset', { body: input });
 	},
 
-	changePassword(input: { currentPassword: string; newPassword: string }) {
+	changePassword(input: Schemas['ChangePasswordRequest']) {
 		return apiRequest<ApiMessage>('POST', '/api/v1/auth/password/change', { body: input });
 	},
 

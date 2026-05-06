@@ -51,12 +51,27 @@ Then visit:
 
 - **<https://localhost:5173>** — frontend (login + register + passkey-protected app)
 - **<https://localhost:8443/actuator/health>** — backend health
+- **<https://localhost:8443/swagger-ui.html>** — interactive Swagger UI (OpenAPI 3.1 spec at `/v3/api-docs`)
 - **<http://localhost:8025>** — Mailpit web UI (catches outgoing dev mail)
 
 If port 5432 is in use by a native postgres, our compose maps host port **55432** instead — config already accounts for this.
 
 If you'd rather run pieces by hand: `pnpm infra:up`, `pnpm dev:api`, `pnpm dev:web`,
 `pnpm infra:down`. See `package.json` for the full script list.
+
+### Regenerating the SPA's API types
+
+The frontend's wire types live in [`apps/web/src/lib/api/generated.ts`](apps/web/src/lib/api/generated.ts),
+produced from the backend's OpenAPI spec. Whenever a controller or DTO changes:
+
+```bash
+# Backend must be running at https://localhost:8443
+cd apps/web
+pnpm gen:api
+```
+
+`generated.ts` is committed to git so the SPA builds without a live
+backend; CI catches drift via `svelte-check`.
 
 ---
 
