@@ -17,6 +17,7 @@
 		todayInZone
 	} from '$lib/util/datetime';
 	import BookingFormDialog from '$lib/components/bookings/BookingFormDialog.svelte';
+	import BookingSidePanel from '$lib/components/bookings/BookingSidePanel.svelte';
 
 	const PIXELS_PER_MINUTE = 1.2; // 60 min ≈ 72px row height
 	const SLOT_MINUTES = 30;
@@ -38,6 +39,9 @@
 		undefined
 	);
 	let dialogExisting = $state<BookingDto | undefined>(undefined);
+
+	// ---- Side panel state ------------------------------------------------
+	let selectedBooking = $state<BookingDto | null>(null);
 
 	onMount(async () => {
 		try {
@@ -142,24 +146,37 @@
 		dialogOpen = true;
 	}
 
-	function openEdit(b: BookingDto) {
-		if (b.status === 'COMPLETED' || b.status === 'CANCELLED') {
-			toast.info(`This booking is ${b.status.toLowerCase()} and can't be edited.`);
-			return;
-		}
-		dialogExisting = b;
+	function selectBooking(b: BookingDto) {
+		selectedBooking = b;
+	}
+
+	function closePanel() {
+		selectedBooking = null;
+	}
+
+	function startEditFromPanel() {
+		if (!selectedBooking) return;
+		dialogExisting = selectedBooking;
 		dialogPrefill = undefined;
 		dialogMode = 'edit';
 		dialogOpen = true;
 	}
 
-	function onClose() {
+	function onDialogClose() {
 		dialogOpen = false;
 	}
 
-	function onSaved() {
+	function onDialogSaved(saved: BookingDto) {
 		dialogOpen = false;
 		toast.success(dialogMode === 'edit' ? 'Booking updated.' : 'Booking created.');
+		// Keep the side panel pointed at the same booking when this was an
+		// edit — the saved row is fresher than what the panel had.
+		if (dialogMode === 'edit') selectedBooking = saved;
+		void loadSchedule();
+	}
+
+	function onPanelChanged(b: BookingDto) {
+		selectedBooking = b;
 		void loadSchedule();
 	}
 </script>
@@ -283,12 +300,12 @@
 										type="button"
 										class="absolute right-1 left-1 cursor-pointer rounded border px-2 py-1 text-left text-xs shadow-sm {statusColor(
 											b.status
-										)}"
+										)} {selectedBooking?.id === b.id ? 'ring-2 ring-primary' : ''}"
 										style:top="{bookingTop(b)}px"
 										style:height="{bookingHeight(b)}px"
 										onclick={(e) => {
 											e.stopPropagation();
-											openEdit(b);
+											selectBooking(b);
 										}}
 									>
 										<span class="block font-medium">
@@ -323,7 +340,18 @@
 		existing={dialogExisting}
 		prefill={dialogPrefill}
 		defaultMinutes={clinic.defaultBookingMinutes}
-		{onClose}
-		{onSaved}
+		onClose={onDialogClose}
+		onSaved={onDialogSaved}
 	/>
+	{#if selectedBooking}
+		<BookingSidePanel
+			booking={selectedBooking}
+			timezone={clinic.timezone}
+			{rooms}
+			{surgeons}
+			onClose={closePanel}
+			onEdit={startEditFromPanel}
+			onChanged={onPanelChanged}
+		/>
+	{/if}
 {/if}

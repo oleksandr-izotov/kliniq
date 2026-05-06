@@ -9,13 +9,14 @@
 	let { data }: { data: PageData } = $props();
 	let signingOut = $state(false);
 
+	const isManager = $derived(data.user.role === 'MANAGER' || data.user.role === 'ADMIN');
+	const isAdmin = $derived(data.user.role === 'ADMIN');
+
 	async function logout() {
 		signingOut = true;
 		try {
 			await authApi.logout();
 			toast.success('Signed out');
-			// Invalidate so server load reruns and the layout guard kicks us
-			// out cleanly — but we explicitly redirect anyway.
 			await invalidateAll();
 			await goto('/login');
 		} catch (e) {
@@ -25,34 +26,113 @@
 			toast.error(msg);
 		}
 	}
+
+	function roleBadge(role: string): string {
+		switch (role) {
+			case 'ADMIN':
+				return 'bg-primary/15 text-primary border-primary/30';
+			case 'MANAGER':
+				return 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40';
+			default:
+				return 'bg-muted text-muted-foreground border-border';
+		}
+	}
 </script>
 
 <svelte:head>
 	<title>Kliniq</title>
 </svelte:head>
 
-<main class="flex min-h-screen items-center justify-center bg-background p-6">
-	<Card.Root class="w-full max-w-md rounded-2xl border-border/40 shadow-2xl">
-		<Card.Header class="space-y-2 px-6 pt-6">
-			<Card.Title class="text-2xl font-bold tracking-tight">
-				Welcome back, {data.user.displayName}
-			</Card.Title>
-			<Card.Description>{data.user.email}</Card.Description>
-		</Card.Header>
-		<Card.Content class="space-y-4 px-6 pb-6">
-			<p class="text-sm text-muted-foreground">
-				The booking dashboard lands here in the next sprint. For now, this screen confirms your
-				session is alive — you can sign in and out, and a logged-out visitor will be redirected back
-				to the login page automatically.
-			</p>
-			<div class="flex items-center justify-between">
-				<a href="/settings/security" class="text-sm font-medium text-primary hover:underline">
-					Security settings →
-				</a>
-				<Button variant="outline" onclick={logout} disabled={signingOut}>
-					{signingOut ? 'Signing out…' : 'Sign out'}
-				</Button>
+<main class="min-h-screen bg-background p-6">
+	<div class="mx-auto w-full max-w-4xl space-y-6">
+		<header class="flex flex-wrap items-end justify-between gap-3">
+			<div class="space-y-1">
+				<h1 class="text-3xl font-bold tracking-tight">
+					Welcome back, {data.user.displayName}
+				</h1>
+				<p class="text-sm text-muted-foreground">
+					{data.user.email}
+					<span
+						class="ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs tracking-wide uppercase {roleBadge(
+							data.user.role
+						)}"
+					>
+						{data.user.role.toLowerCase()}
+					</span>
+				</p>
 			</div>
-		</Card.Content>
-	</Card.Root>
+			<Button variant="outline" onclick={logout} disabled={signingOut}>
+				{signingOut ? 'Signing out…' : 'Sign out'}
+			</Button>
+		</header>
+
+		<section class="grid gap-4 sm:grid-cols-2">
+			<a
+				href="/schedule"
+				class="group rounded-2xl border p-5 transition hover:border-primary/40"
+				data-testid="tile-schedule"
+			>
+				<h2 class="text-lg font-semibold">Schedule</h2>
+				<p class="mt-1 text-sm text-muted-foreground">
+					Day-view of every operating room. Click an empty slot to book.
+				</p>
+				<span class="mt-3 inline-block text-sm font-medium text-primary group-hover:underline">
+					Open →
+				</span>
+			</a>
+
+			{#if isManager}
+				<a
+					href="/operating-rooms"
+					class="group rounded-2xl border p-5 transition hover:border-primary/40"
+					data-testid="tile-operating-rooms"
+				>
+					<h2 class="text-lg font-semibold">Operating rooms</h2>
+					<p class="mt-1 text-sm text-muted-foreground">
+						Add, rename, mark for maintenance, or archive operating rooms.
+					</p>
+					<span class="mt-3 inline-block text-sm font-medium text-primary group-hover:underline">
+						Manage →
+					</span>
+				</a>
+			{/if}
+
+			{#if isAdmin}
+				<a
+					href="/settings/clinic"
+					class="group rounded-2xl border p-5 transition hover:border-primary/40"
+					data-testid="tile-clinic-settings"
+				>
+					<h2 class="text-lg font-semibold">Clinic settings</h2>
+					<p class="mt-1 text-sm text-muted-foreground">
+						Name, timezone, working hours, and the default booking length.
+					</p>
+					<span class="mt-3 inline-block text-sm font-medium text-primary group-hover:underline">
+						Configure →
+					</span>
+				</a>
+			{/if}
+
+			<a
+				href="/settings/security"
+				class="group rounded-2xl border p-5 transition hover:border-primary/40"
+				data-testid="tile-security"
+			>
+				<h2 class="text-lg font-semibold">Security settings</h2>
+				<p class="mt-1 text-sm text-muted-foreground">
+					Change your password and manage passkeys for this account.
+				</p>
+				<span class="mt-3 inline-block text-sm font-medium text-primary group-hover:underline">
+					Open →
+				</span>
+			</a>
+		</section>
+
+		<Card.Root class="rounded-2xl">
+			<Card.Content class="px-6 py-4 text-sm text-muted-foreground">
+				Session is alive — closing the tab won't sign you out, but choosing <em>Sign out</em>
+				above will end the session everywhere.
+			</Card.Content>
+		</Card.Root>
+	</div>
 </main>

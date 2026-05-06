@@ -49,6 +49,14 @@ test('manager can create a booking, hit a conflict, and edit the time', async ({
 	await expect(page).toHaveURL('/');
 	await expect(page.locator('main').getByText(`Welcome back, ${displayName}`)).toBeVisible();
 
+	// Home dashboard surfaces role-appropriate tiles. STAFF (default) sees
+	// schedule + security; promoting to MANAGER unlocks operating-rooms;
+	// ADMIN unlocks clinic settings. We're MANAGER here, so:
+	await expect(page.getByTestId('tile-schedule')).toBeVisible();
+	await expect(page.getByTestId('tile-operating-rooms')).toBeVisible();
+	await expect(page.getByTestId('tile-security')).toBeVisible();
+	await expect(page.getByTestId('tile-clinic-settings')).toHaveCount(0);
+
 	// ---- create an OR via the management page ------------------------------
 	const orCode = `E2E-${Date.now().toString().slice(-5)}`;
 	await gotoHydrated(page, '/operating-rooms');
@@ -125,11 +133,17 @@ test('manager can create a booking, hit a conflict, and edit the time', async ({
 	await dialog.getByRole('button', { name: /^Cancel$/ }).click();
 	await expect(dialog).toBeHidden();
 
-	// ---- edit: click the existing block, shift it to 11:00–12:00 ----------
+	// ---- side panel: clicking the block opens it (no longer the dialog) -----
 	await block.click();
+	const panel = page.getByRole('complementary', { name: 'Booking details' });
+	await expect(panel).toBeVisible();
+	await expect(panel.getByText('scheduled', { exact: true })).toBeVisible();
+	await expect(panel.getByText('Knee arthroscopy')).toBeVisible();
+
+	// ---- edit via panel: shift the block to 11:00–12:00 ---------------------
+	await panel.getByRole('button', { name: /^Edit$/ }).click();
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText('Edit booking')).toBeVisible();
-	// Patient ref is locked in edit mode.
 	await expect(dialog.locator('#bf-patient')).toBeDisabled();
 
 	await dialog.locator('#bf-start').fill('11:00');
@@ -156,4 +170,13 @@ test('manager can create a booking, hit a conflict, and edit the time', async ({
 			.locator(`div[aria-label="Create booking in ${orCode}"]`)
 			.locator('button', { hasText: '09:00–10:00' })
 	).toHaveCount(0);
+
+	// ---- cancel via panel: status flips to CANCELLED ------------------------
+	page.on('dialog', (d) => d.accept()); // confirm() → OK
+	await panel.getByRole('button', { name: /^Cancel$/ }).click();
+	await expect(page.getByText('Booking cancelled.')).toBeVisible();
+	// Match the status pill (exact text) — the "no actions left" hint also
+	// contains the word "cancelled" and would trip strict-mode otherwise.
+	await expect(panel.getByText('cancelled', { exact: true })).toBeVisible();
+	await expect(panel.getByText(/no actions left/)).toBeVisible();
 });
