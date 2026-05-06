@@ -47,6 +47,17 @@ interface BookingRepository {
     ): List<Booking>
 
     /**
+     * Same window semantics as [findByOperatingRoomBetween] but across many
+     * rooms in one query — avoids N+1 when the schedule day-view fans out
+     * across every room in the clinic.
+     */
+    fun findByOperatingRoomsBetween(
+        operatingRoomIds: Collection<UUID>,
+        fromInclusive: OffsetDateTime,
+        toExclusive: OffsetDateTime,
+    ): List<Booking>
+
+    /**
      * Count of bookings on [operatingRoomId] that still hold a slot
      * (SCHEDULED or IN_PROGRESS). Used by the OR archive flow to refuse
      * archiving a room with live bookings.

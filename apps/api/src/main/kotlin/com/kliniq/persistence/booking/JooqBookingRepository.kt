@@ -99,6 +99,22 @@ class JooqBookingRepository(
             .fetch()
             .map { it.toDomain() }
 
+    override fun findByOperatingRoomsBetween(
+        operatingRoomIds: Collection<UUID>,
+        fromInclusive: OffsetDateTime,
+        toExclusive: OffsetDateTime,
+    ): List<Booking> {
+        if (operatingRoomIds.isEmpty()) return emptyList()
+        return dsl
+            .selectFrom(BOOKINGS)
+            .where(BOOKINGS.OPERATING_ROOM_ID.`in`(operatingRoomIds))
+            .and(BOOKINGS.STARTS_AT.ge(fromInclusive))
+            .and(BOOKINGS.STARTS_AT.lt(toExclusive))
+            .orderBy(BOOKINGS.OPERATING_ROOM_ID.asc(), BOOKINGS.STARTS_AT.asc())
+            .fetch()
+            .map { it.toDomain() }
+    }
+
     override fun countActiveByOperatingRoom(operatingRoomId: UUID): Long =
         dsl
             .fetchCount(
