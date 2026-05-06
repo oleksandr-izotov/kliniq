@@ -1,16 +1,23 @@
 """
-End-to-end smoke test for Kliniq auth.
+End-to-end smoke test for Kliniq.
 
 Hits the live Spring backend at https://localhost:8443 and uses Mailpit's
 HTTP API at http://localhost:8025 to extract verification and reset tokens
 from delivered emails. Also verifies the SvelteKit dev server's auth gate
 if it's reachable at https://localhost:5173.
 
-Run: python scripts/smoke_test.py
+Run:
+  python scripts/smoke_test.py                  # auth-only smoke
+  python scripts/smoke_test.py --include-booking  # also exercises the
+                                                  # booking happy path
+                                                  # (needs `pip install
+                                                  # psycopg[binary]` to
+                                                  # seed manager+surgeon)
 """
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 import time
@@ -28,6 +35,12 @@ EMAIL = f"smoke-{int(time.time())}@kliniq.test"
 PASSWORD = "correct-horse-battery-staple"
 NEW_PASSWORD = "totally-new-passphrase-9876"
 DISPLAY = "Smoke Tester"
+
+# Booking-flow uses a separate user so it doesn't tangle with the
+# password-reset assertions on the auth user above.
+BOOKING_EMAIL = f"smoke-book-{int(time.time())}@kliniq.test"
+BOOKING_DISPLAY = "Booking Smoke"
+DEV_PG_URL = "postgres://kliniq:kliniq_dev_only@localhost:55432/kliniq"
 
 
 def section(title: str) -> None:
@@ -98,7 +111,144 @@ def fetch_token_from_mail(subject_substr: str, link_regex: str) -> str:
     return ""  # unreachable
 
 
+def promote_to_manager_surgeon(email: str) -> None:
+    """Flip the seeded user's role to MANAGER and flag them as a GENERAL surgeon
+    so they can both POST /operating-rooms and show up in the booking
+    modal's surgeon picker. There is no public endpoint for either bit;
+    role/specialty changes are an admin concern outside Sprint 2's scope."""
+    try:
+        import psycopg
+    except ImportError:
+        fail(
+            "--include-booking requires psycopg",
+            "install with `pip install psycopg[binary]` and re-run",
+        )
+    with psycopg.connect(DEV_PG_URL, autocommit=True) as conn:  # type: ignore[attr-defined]
+        conn.execute(
+            "UPDATE users SET role = 'MANAGER', is_surgeon = TRUE, specialty = 'GENERAL' "
+            "WHERE email_normalized = %s",
+            (email.lower(),),
+        )
+
+
+def cleanup_booking_fixtures() -> None:
+    """Drop booking-flow rows so reruns stay independent. Mirrors what
+    the Playwright `cleanupTestData` helper does in apps/web/e2e."""
+    try:
+        import psycopg
+    except ImportError:
+        return
+    with psycopg.connect(DEV_PG_URL, autocommit=True) as conn:  # type: ignore[attr-defined]
+        conn.execute("DELETE FROM bookings WHERE patient_ref LIKE 'P-9999-%'")
+        conn.execute("DELETE FROM operating_rooms WHERE code LIKE 'SMOKE-%'")
+        conn.execute("DELETE FROM users WHERE email_normalized LIKE 'smoke-book-%'")
+
+
+def run_booking_flow() -> None:
+    section("BOOKING FLOW: register MANAGER+surgeon")
+    cleanup_booking_fixtures()
+
+    s = make_session()
+    s.get(f"{BACKEND}/api/v1/auth/me", verify=False)
+    api_post(s, "/api/v1/auth/register", {
+        "email": BOOKING_EMAIL, "password": PASSWORD, "displayName": BOOKING_DISPLAY,
+    })
+    ok(f"registered {BOOKING_EMAIL}")
+
+    verify_token = fetch_token_from_mail("verify", r"verify\?token=([A-Za-z0-9_-]+)")
+    api_post(s, "/api/v1/auth/verify", {"token": verify_token})
+    ok("verified")
+
+    promote_to_manager_surgeon(BOOKING_EMAIL)
+    ok("promoted to MANAGER + GENERAL surgeon (via dev Postgres)")
+
+    api_post(s, "/api/v1/auth/login", {"email": BOOKING_EMAIL, "password": PASSWORD})
+    ok("logged in")
+
+    section("create operating room")
+    or_code = f"SMOKE-{int(time.time()) % 100000}"
+    r = api_post(s, "/api/v1/operating-rooms", {
+        "code": or_code, "name": "Smoke Suite", "notes": "smoke-test scratch room",
+    }, expect=201)
+    or_id = r.json()["id"]
+    ok(f"OR {or_code} created (id={or_id[:8]}...)")
+
+    section("look up our own surgeon id")
+    r = api_get(s, "/api/v1/users/surgeons")
+    surgeons = r.json()
+    me = next((u for u in surgeons if u["displayName"] == BOOKING_DISPLAY), None)
+    if me is None:
+        fail("our display name not in /users/surgeons", str(surgeons))
+    surgeon_id = me["id"]
+    ok(f"surgeon picker contains us (id={surgeon_id[:8]}...)")
+
+    section("create a booking")
+    starts = "2099-06-15T09:00:00Z"
+    ends = "2099-06-15T10:00:00Z"
+    patient_ref = f"P-9999-{int(time.time()) % 1000:03d}"
+    r = api_post(s, "/api/v1/bookings", {
+        "operatingRoomId": or_id,
+        "surgeonId": surgeon_id,
+        "startsAt": starts,
+        "endsAt": ends,
+        "opType": "Smoke arthroscopy",
+        "patientRef": patient_ref,
+    }, expect=201)
+    booking_id = r.json()["id"]
+    if r.json()["status"] != "SCHEDULED":
+        fail(f"new booking should be SCHEDULED, got {r.json()['status']}")
+    ok(f"booking {booking_id[:8]}... created in SCHEDULED")
+
+    section("conflict: overlapping booking is rejected with 409")
+    api_post(s, "/api/v1/bookings", {
+        "operatingRoomId": or_id,
+        "surgeonId": surgeon_id,
+        "startsAt": "2099-06-15T09:30:00Z",
+        "endsAt": "2099-06-15T10:30:00Z",
+        "opType": "Conflicting op",
+        "patientRef": f"P-9999-{int(time.time()) % 1000:03d}",
+    }, expect=409)
+    ok("overlapping POST -> 409 BOOKING_CONFLICT as expected")
+
+    section("schedule day-view returns the booking")
+    r = api_get(s, "/api/v1/schedule?date=2099-06-15")
+    rooms = r.json()["operatingRooms"]
+    our_room = next((rm for rm in rooms if rm["id"] == or_id), None)
+    if our_room is None:
+        fail(f"our OR not in schedule response", str(rooms))
+    if not any(b["id"] == booking_id for b in our_room["bookings"]):
+        fail("our booking not in schedule response", str(our_room))
+    ok("schedule day-view shows the new booking")
+
+    section("cancel: status flips to CANCELLED")
+    r = api_post(s, f"/api/v1/bookings/{booking_id}/cancel", {})
+    if r.json()["status"] != "CANCELLED":
+        fail(f"after /cancel status should be CANCELLED, got {r.json()['status']}")
+    ok("POST /cancel -> CANCELLED")
+
+    section("after cancel: same slot is bookable again (EXCLUDE predicate is partial)")
+    api_post(s, "/api/v1/bookings", {
+        "operatingRoomId": or_id,
+        "surgeonId": surgeon_id,
+        "startsAt": starts,
+        "endsAt": ends,
+        "opType": "Re-booked after cancel",
+        "patientRef": f"P-9999-{(int(time.time()) + 1) % 1000:03d}",
+    }, expect=201)
+    ok("freed slot accepts a new booking")
+
+    cleanup_booking_fixtures()
+    ok("booking-flow fixtures cleaned up")
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--include-booking", action="store_true",
+        help="also exercise the booking happy path (requires psycopg)",
+    )
+    args = parser.parse_args()
+
     print(f"Smoke target: {BACKEND}")
     print(f"Test email:   {EMAIL}")
 
@@ -167,6 +317,11 @@ def main() -> None:
     api_post(s2, "/api/v1/auth/login", {"email": EMAIL, "password": PASSWORD}, expect=401)
     ok("old password -> 401")
 
+    # Failed attempt above arms the per-IP backoff (~2s window). The
+    # Playwright auth flow sleeps the same way; without this, the next
+    # POST /login comes back 429 LOGIN_BACKOFF.
+    time.sleep(2.5)
+
     section("login with NEW password succeeds")
     api_post(s2, "/api/v1/auth/login", {"email": EMAIL, "password": NEW_PASSWORD})
     ok("new password -> 200")
@@ -218,6 +373,9 @@ def main() -> None:
                 ok(f"authed GET / -> 200 (could not confirm content; len={len(r.text)})")
         else:
             fail(f"authed GET / -> {r.status_code}", r.text[:300])
+
+    if args.include_booking:
+        run_booking_flow()
 
     print("\nAll checks passed.")
 

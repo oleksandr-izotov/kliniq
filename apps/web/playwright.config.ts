@@ -27,6 +27,11 @@ export default defineConfig({
 		ignoreHTTPSErrors: true,
 		trace: 'retain-on-failure'
 	},
+	// One worker. Every e2e test registers + verifies a fresh user, and
+	// firing four parallel register flows at the dev backend trips the
+	// per-IP register/login rate limiters intermittently. Sequential runs
+	// add a few seconds for the whole suite but eliminate the flake.
+	workers: 1,
 	testMatch: '**/*.e2e.{ts,js}',
 	projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
 });

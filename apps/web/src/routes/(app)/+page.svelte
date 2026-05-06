@@ -4,6 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import { ApiError_, authApi } from '$lib/auth/api';
+	import ModeToggle from '$lib/components/ModeToggle.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -61,9 +62,12 @@
 					</span>
 				</p>
 			</div>
-			<Button variant="outline" onclick={logout} disabled={signingOut}>
-				{signingOut ? 'Signing out…' : 'Sign out'}
-			</Button>
+			<div class="flex items-center gap-2">
+				<ModeToggle />
+				<Button variant="outline" onclick={logout} disabled={signingOut}>
+					{signingOut ? 'Signing out…' : 'Sign out'}
+				</Button>
+			</div>
 		</header>
 
 		<section class="grid gap-4 sm:grid-cols-2">

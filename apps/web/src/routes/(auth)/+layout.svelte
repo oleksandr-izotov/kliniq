@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { authApi } from '$lib/auth/api';
+	import ModeToggle from '$lib/components/ModeToggle.svelte';
 
 	let { children } = $props();
 
@@ -46,7 +47,10 @@
 	</aside>
 
 	<!-- Form panel -->
-	<main class="flex items-center justify-center overflow-y-auto p-6 lg:p-12">
+	<main class="relative flex items-center justify-center overflow-y-auto p-6 lg:p-12">
+		<div class="absolute top-4 right-4">
+			<ModeToggle />
+		</div>
 		<div class="w-full max-w-lg">
 			<!-- Mobile-only logo (the brand panel is hidden < lg) -->
 			<div class="mb-8 flex items-center gap-2 lg:hidden">
