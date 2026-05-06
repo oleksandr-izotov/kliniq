@@ -63,6 +63,11 @@ class SecurityConfig {
                 it
                     .requestMatchers(HttpMethod.DELETE, "/api/v1/operating-rooms/*")
                     .hasAnyRole("MANAGER", "ADMIN")
+                // Clinic-wide settings live behind ADMIN — managers can read but
+                // not change them. The GET stays open to any authenticated user.
+                it
+                    .requestMatchers(HttpMethod.PATCH, "/api/v1/clinic/settings")
+                    .hasRole("ADMIN")
                 it.anyRequest().authenticated()
             }.addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
             .exceptionHandling { ex ->

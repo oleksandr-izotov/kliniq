@@ -26,9 +26,13 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.MvcResult
+import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.patch
 import org.springframework.test.web.servlet.post
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.util.UUID
 
 @SpringBootTest
 @Import(TestcontainersConfig::class)
@@ -365,5 +369,161 @@ class OperatingRoomControllerIntegrationTest
                     .map { it.action!! }
 
             assertThat(actions).contains("operating_room.created", "operating_room.updated")
+        }
+
+        // ---- DELETE / archive ------------------------------------------------
+
+        @Test
+        fun `manager can archive an OR with no active bookings`() {
+            val managerCookie = loginAs("mgr@kliniq.local", Role.MANAGER)
+            val created =
+                mockMvc
+                    .post("/api/v1/operating-rooms") {
+                        with(csrf())
+                        cookie(cookie(managerCookie))
+                        contentType = MediaType.APPLICATION_JSON
+                        content = mapper.writeValueAsString(mapOf("code" to "OR-DROP", "name" to "Drop"))
+                    }.andReturn()
+                    .response.contentAsString
+            val id = mapper.readTree(created).get("id").asText()
+
+            mockMvc
+                .delete("/api/v1/operating-rooms/$id") {
+                    with(csrf())
+                    cookie(cookie(managerCookie))
+                }.andExpect { status { isNoContent() } }
+
+            // Default list (excludes RETIRED) no longer shows it.
+            mockMvc
+                .get("/api/v1/operating-rooms") { cookie(cookie(managerCookie)) }
+                .andExpect {
+                    status { isOk() }
+                    jsonPath("$.length()") { value(0) }
+                }
+
+            // Audit row written.
+            val actions =
+                dsl
+                    .selectFrom(com.kliniq.db.tables.references.AUDIT_EVENTS)
+                    .where(
+                        com.kliniq.db.tables.references.AUDIT_EVENTS.ENTITY_ID
+                            .eq(UUID.fromString(id)),
+                    ).fetch()
+                    .map { it.action!! }
+            assertThat(actions).contains("operating_room.archived")
+        }
+
+        @Test
+        fun `archive on OR with active bookings is rejected with 409 OR_HAS_ACTIVE_BOOKINGS`() {
+            val managerCookie = loginAs("mgr@kliniq.local", Role.MANAGER)
+            val created =
+                mockMvc
+                    .post("/api/v1/operating-rooms") {
+                        with(csrf())
+                        cookie(cookie(managerCookie))
+                        contentType = MediaType.APPLICATION_JSON
+                        content = mapper.writeValueAsString(mapOf("code" to "OR-BUSY", "name" to "Busy"))
+                    }.andReturn()
+                    .response.contentAsString
+            val id = mapper.readTree(created).get("id").asText()
+
+            // Seed an active booking on the room directly via DSL — going
+            // through the API would just duplicate the test surface.
+            val surgeonId = UUID.randomUUID()
+            dsl
+                .insertInto(USERS)
+                .set(USERS.ID, surgeonId)
+                .set(USERS.EMAIL, "doc-$surgeonId@kliniq.local")
+                .set(USERS.DISPLAY_NAME, "Dr Test")
+                .set(USERS.ROLE, "STAFF")
+                .set(USERS.IS_SURGEON, true)
+                .set(USERS.SPECIALTY, "GENERAL")
+                .execute()
+            dsl
+                .insertInto(com.kliniq.db.tables.references.BOOKINGS)
+                .set(com.kliniq.db.tables.references.BOOKINGS.ID, UUID.randomUUID())
+                .set(com.kliniq.db.tables.references.BOOKINGS.OPERATING_ROOM_ID, UUID.fromString(id))
+                .set(com.kliniq.db.tables.references.BOOKINGS.SURGEON_ID, surgeonId)
+                .set(com.kliniq.db.tables.references.BOOKINGS.CREATED_BY_ID, surgeonId)
+                .set(
+                    com.kliniq.db.tables.references.BOOKINGS.STARTS_AT,
+                    OffsetDateTime.of(2026, 7, 1, 9, 0, 0, 0, ZoneOffset.UTC),
+                ).set(
+                    com.kliniq.db.tables.references.BOOKINGS.ENDS_AT,
+                    OffsetDateTime.of(2026, 7, 1, 10, 0, 0, 0, ZoneOffset.UTC),
+                ).set(com.kliniq.db.tables.references.BOOKINGS.OP_TYPE, "Probe")
+                .set(com.kliniq.db.tables.references.BOOKINGS.PATIENT_REF, "P-2026-001")
+                .execute()
+
+            mockMvc
+                .delete("/api/v1/operating-rooms/$id") {
+                    with(csrf())
+                    cookie(cookie(managerCookie))
+                }.andExpect {
+                    status { isConflict() }
+                    jsonPath("$.code") { value("OR_HAS_ACTIVE_BOOKINGS") }
+                }
+        }
+
+        @Test
+        fun `archive on missing id returns 404`() {
+            val managerCookie = loginAs("mgr@kliniq.local", Role.MANAGER)
+            mockMvc
+                .delete("/api/v1/operating-rooms/00000000-0000-0000-0000-000000000123") {
+                    with(csrf())
+                    cookie(cookie(managerCookie))
+                }.andExpect { status { isNotFound() } }
+        }
+
+        @Test
+        fun `archive on already-RETIRED OR returns 409 ALREADY_ARCHIVED`() {
+            val managerCookie = loginAs("mgr@kliniq.local", Role.MANAGER)
+            val created =
+                mockMvc
+                    .post("/api/v1/operating-rooms") {
+                        with(csrf())
+                        cookie(cookie(managerCookie))
+                        contentType = MediaType.APPLICATION_JSON
+                        content = mapper.writeValueAsString(mapOf("code" to "OR-RTD", "name" to "Retired"))
+                    }.andReturn()
+                    .response.contentAsString
+            val id = mapper.readTree(created).get("id").asText()
+
+            mockMvc
+                .delete("/api/v1/operating-rooms/$id") {
+                    with(csrf())
+                    cookie(cookie(managerCookie))
+                }.andExpect { status { isNoContent() } }
+
+            mockMvc
+                .delete("/api/v1/operating-rooms/$id") {
+                    with(csrf())
+                    cookie(cookie(managerCookie))
+                }.andExpect {
+                    status { isConflict() }
+                    jsonPath("$.code") { value("ALREADY_ARCHIVED") }
+                }
+        }
+
+        @Test
+        fun `staff cannot archive`() {
+            val managerCookie = loginAs("mgr@kliniq.local", Role.MANAGER)
+            val staffCookie = loginAs("staff3@kliniq.local", Role.STAFF)
+            val created =
+                mockMvc
+                    .post("/api/v1/operating-rooms") {
+                        with(csrf())
+                        cookie(cookie(managerCookie))
+                        contentType = MediaType.APPLICATION_JSON
+                        content = mapper.writeValueAsString(mapOf("code" to "OR-LOCK", "name" to "Locked"))
+                    }.andReturn()
+                    .response.contentAsString
+            val id = mapper.readTree(created).get("id").asText()
+
+            mockMvc
+                .delete("/api/v1/operating-rooms/$id") {
+                    with(csrf())
+                    cookie(cookie(staffCookie))
+                }.andExpect { status { isForbidden() } }
         }
     }

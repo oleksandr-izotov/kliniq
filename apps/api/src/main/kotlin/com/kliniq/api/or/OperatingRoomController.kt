@@ -3,6 +3,7 @@ package com.kliniq.api.or
 import com.kliniq.api.error.ApiErrorResponse
 import com.kliniq.domain.or.OperatingRoomPatch
 import com.kliniq.infra.security.KliniqAuthentication
+import com.kliniq.usecase.or.ArchiveOperatingRoomUseCase
 import com.kliniq.usecase.or.CreateOperatingRoomUseCase
 import com.kliniq.usecase.or.ListOperatingRoomsUseCase
 import com.kliniq.usecase.or.UpdateOperatingRoomUseCase
@@ -10,6 +11,7 @@ import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -22,10 +24,12 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("/api/v1/operating-rooms")
+@Suppress("LongParameterList") // controller orchestrates many use cases via DI
 class OperatingRoomController(
     private val createUseCase: CreateOperatingRoomUseCase,
     private val updateUseCase: UpdateOperatingRoomUseCase,
     private val listUseCase: ListOperatingRoomsUseCase,
+    private val archiveUseCase: ArchiveOperatingRoomUseCase,
 ) {
     /** All authenticated users can read the list. */
     @GetMapping
@@ -71,6 +75,39 @@ class OperatingRoomController(
             is CreateOperatingRoomUseCase.Result.InvalidInput ->
                 ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
                     ApiErrorResponse(code = "VALIDATION_ERROR", message = result.reason),
+                )
+        }
+
+    /**
+     * Soft-delete: sets status=RETIRED. Refused with 409 if the room
+     * still holds active (SCHEDULED / IN_PROGRESS) bookings — caller
+     * must cancel or reassign them first.
+     */
+    @DeleteMapping("/{id}")
+    fun archive(
+        @PathVariable id: UUID,
+    ): ResponseEntity<*> =
+        when (val result = archiveUseCase.archive(currentUserId(), id)) {
+            ArchiveOperatingRoomUseCase.Result.Success -> ResponseEntity.noContent().build<Any>()
+            ArchiveOperatingRoomUseCase.Result.NotFound ->
+                ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+                    ApiErrorResponse(code = "NOT_FOUND", message = "Operating room not found."),
+                )
+            ArchiveOperatingRoomUseCase.Result.AlreadyArchived ->
+                ResponseEntity.status(HttpStatus.CONFLICT).body(
+                    ApiErrorResponse(
+                        code = "ALREADY_ARCHIVED",
+                        message = "Operating room is already retired.",
+                    ),
+                )
+            is ArchiveOperatingRoomUseCase.Result.HasActiveBookings ->
+                ResponseEntity.status(HttpStatus.CONFLICT).body(
+                    ApiErrorResponse(
+                        code = "OR_HAS_ACTIVE_BOOKINGS",
+                        message =
+                            "Cannot archive: ${result.activeCount} active booking(s) still reference " +
+                                "this room. Cancel or move them first.",
+                    ),
                 )
         }
 
