@@ -59,6 +59,60 @@ async function fetchTokenFromMailpit(email: string, kind: 'verify' | 'reset'): P
 export const uniqueEmail = (prefix: string): string =>
 	`${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@kliniq.test`;
 
+/* -----------------------------------------------------------------------------
+ * Test-only DB seeding. The booking modal needs a surgeon row, and the
+ * /operating-rooms page needs a MANAGER session — neither has a public
+ * endpoint that can flip those bits, so we reach into the dev Postgres
+ * directly. Credentials match `compose.yaml`'s dev defaults.
+ * -------------------------------------------------------------------------- */
+
+import { Client } from 'pg';
+
+const DEV_PG_URL = 'postgres://kliniq:kliniq_dev_only@localhost:55432/kliniq';
+
+async function withClient<T>(fn: (c: Client) => Promise<T>): Promise<T> {
+	const c = new Client({ connectionString: DEV_PG_URL });
+	await c.connect();
+	try {
+		return await fn(c);
+	} finally {
+		await c.end();
+	}
+}
+
+/**
+ * Promote a registered+verified user to MANAGER and (optionally) flag
+ * them as a surgeon with a specialty so the booking-modal picker can
+ * find them. Idempotent — running twice doesn't matter.
+ */
+export async function promoteUser(
+	email: string,
+	opts: { role?: 'STAFF' | 'MANAGER' | 'ADMIN'; surgeonSpecialty?: string } = {}
+): Promise<void> {
+	const role = opts.role ?? 'MANAGER';
+	const isSurgeon = opts.surgeonSpecialty != null;
+	const specialty = opts.surgeonSpecialty ?? null;
+	await withClient(async (c) => {
+		await c.query(
+			'UPDATE users SET role = $1, is_surgeon = $2, specialty = $3 WHERE email_normalized = $4',
+			[role, isSurgeon, specialty, email.toLowerCase()]
+		);
+	});
+}
+
+/**
+ * Drop test artefacts from previous runs so tests stay independent without
+ * a full DB reset between them. Targets fixtures created by the e2e suite
+ * by email/code prefix; production-shaped rows are left alone.
+ */
+export async function cleanupTestData(): Promise<void> {
+	await withClient(async (c) => {
+		await c.query("DELETE FROM bookings WHERE patient_ref LIKE 'P-9999-%'");
+		await c.query("DELETE FROM operating_rooms WHERE code LIKE 'E2E-%'");
+		await c.query("DELETE FROM users WHERE email_normalized LIKE '%@kliniq.test'");
+	});
+}
+
 /**
  * Navigate to a SvelteKit route and wait until the JS bundle has finished
  * hydrating. Without this Playwright can win the race and click a form
