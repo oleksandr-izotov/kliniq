@@ -26,6 +26,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@internationalized/date':
+        specifier: ^3.12.1
+        version: 3.12.1
       '@simplewebauthn/browser':
         specifier: ^13.3.0
         version: 13.3.0
@@ -45,9 +48,6 @@ importers:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.3.0(jiti@2.6.1))
-      '@internationalized/date':
-        specifier: ^3.12.1
-        version: 3.12.1
       '@lucide/svelte':
         specifier: ^1.14.0
         version: 1.14.0(svelte@5.55.5(@typescript-eslint/types@8.59.1))
