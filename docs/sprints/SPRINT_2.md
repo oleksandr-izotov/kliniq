@@ -4,15 +4,15 @@
 
 **Definition of done:**
 
-- [ ] All endpoints in [API endpoints](#api-endpoints) below behave correctly
-- [ ] Tests cover happy paths and key failure modes (>70% line coverage on `domain/`, `usecase/`, `persistence/` for the booking surface — JaCoCo measured)
-- [ ] OR + Booking + schedule UI exists, looks decent (using shadcn-svelte primitives)
-- [ ] Postgres `EXCLUDE USING gist` constraint rejects overlapping bookings at the DB level — the application layer never opens a window where two conflicting bookings can both commit
-- [ ] OpenAPI 3.1 spec served at `/v3/api-docs` ; `apps/web` types generated from it via `openapi-typescript`, hand-written DTO mirroring removed
-- [ ] CI green
-- [ ] DX: a single `pnpm dev:all` (or `make dev`) brings up compose + bootRun + vite with combined log streams
-- [ ] README "Quick start" gets a fresh checkout to a running app in 5 commands
-- [ ] Booking-domain sanity checklist (below) all green
+- [x] All endpoints in [API endpoints](#api-endpoints) below behave correctly
+- [x] Tests cover happy paths and key failure modes (>70% line coverage on `domain/`, `usecase/`, `persistence/` for the booking surface — JaCoCo measured: **91.8% lines / 62.9% branches** across the Sprint 2 surface; see retro for breakdown)
+- [x] OR + Booking + schedule UI exists, looks decent (using shadcn-svelte primitives)
+- [x] Postgres `EXCLUDE USING gist` constraint rejects overlapping bookings at the DB level — the application layer never opens a window where two conflicting bookings can both commit
+- [x] OpenAPI 3.1 spec served at `/v3/api-docs` ; `apps/web` types generated from it via `openapi-typescript`, hand-written DTO mirroring removed
+- [x] CI green
+- [x] DX: a single `pnpm dev:all` (or `make dev`) brings up compose + bootRun + vite with combined log streams
+- [x] README "Quick start" gets a fresh checkout to a running app in 5 commands
+- [x] Booking-domain sanity checklist (below) all green
 
 **Estimated effort:** 2-3 weeks at chaotic pace.
 
@@ -173,87 +173,88 @@ Promote home from "welcome card" placeholder to a small dashboard pointing at `/
 ## Day-by-day plan
 
 ### Day 16 — Schema + DX kickoff
-- [ ] Write `V3__booking_core.sql`
-- [ ] Run, regenerate jOOQ, sanity-check generated `BookingsRecord` shape
-- [ ] Add `pnpm dev:all` script at repo root that wraps compose + bootRun + vite (use `concurrently` or a 30-line bash script)
-- [ ] Spring DevTools profile in `application-local.yml` for hot Kotlin reload
+- [x] Write `V3__booking_core.sql`
+- [x] Run, regenerate jOOQ, sanity-check generated `BookingsRecord` shape
+- [x] Add `pnpm dev:all` script at repo root that wraps compose + bootRun + vite (use `concurrently` or a 30-line bash script)
+- [x] Spring DevTools profile in `application-local.yml` for hot Kotlin reload
 
 ### Day 17 — Operating rooms
-- [ ] `domain/or/OperatingRoom.kt`, `OperatingRoomStatus.kt`, `NewOperatingRoom.kt`
-- [ ] `persistence/or/OperatingRoomRepository.kt` interface + `JooqOperatingRoomRepository.kt`
-- [ ] Repository tests (CRUD + unique code)
-- [ ] `usecase/or/{Create,Update,List,Archive}OperatingRoomUseCase.kt` + tests
-- [ ] `api/or/OperatingRoomController.kt` + DTOs + integration tests
+- [x] `domain/or/OperatingRoom.kt`, `OperatingRoomStatus.kt`, `NewOperatingRoom.kt`
+- [x] `persistence/or/OperatingRoomRepository.kt` interface + `JooqOperatingRoomRepository.kt`
+- [x] Repository tests (CRUD + unique code)
+- [x] `usecase/or/{Create,Update,List,Archive}OperatingRoomUseCase.kt` + tests
+- [x] `api/or/OperatingRoomController.kt` + DTOs + integration tests
 
 ### Day 18 — Booking domain + repo
-- [ ] `domain/booking/Booking.kt`, `BookingStatus.kt`, `NewBooking.kt`, `BookingTimeRange.kt` (value object)
-- [ ] `persistence/booking/BookingRepository.kt` + `JooqBookingRepository.kt`
-- [ ] Repository tests, especially around `findActiveOverlappingFor(operatingRoomId, range, excluding=...)`
+- [x] `domain/booking/Booking.kt`, `BookingStatus.kt`, `NewBooking.kt`, `BookingTimeRange.kt` (value object)
+- [x] `persistence/booking/BookingRepository.kt` + `JooqBookingRepository.kt`
+- [x] Repository tests, especially around `findActiveOverlappingFor(operatingRoomId, range, excluding=...)`
 
 ### Day 19 — Booking creation + conflict detection
-- [ ] `usecase/booking/CreateBookingUseCase.kt` (validates surgeon-is-surgeon, range valid, within working hours, fails fast on conflicts before INSERT)
-- [ ] Catch Postgres `ExclusionViolation` to surface `BOOKING_CONFLICT` cleanly even under concurrent writes
-- [ ] `api/booking/BookingController.kt` `POST /bookings` + tests
+- [x] `usecase/booking/CreateBookingUseCase.kt` (validates surgeon-is-surgeon, range valid, within working hours, fails fast on conflicts before INSERT)
+- [x] Catch Postgres `ExclusionViolation` to surface `BOOKING_CONFLICT` cleanly even under concurrent writes
+- [x] `api/booking/BookingController.kt` `POST /bookings` + tests
 
 ### Day 20 — Booking lifecycle
-- [ ] `usecase/booking/{Update,Cancel,Start,Complete}BookingUseCase.kt` + lifecycle invariants
-- [ ] PATCH + POST cancel/start/complete endpoints + tests
-- [ ] Audit events: `booking.created/updated/cancelled/started/completed`
+- [x] `usecase/booking/{Update,Cancel,Start,Complete}BookingUseCase.kt` + lifecycle invariants (single `TransitionBookingUseCase` dispatches cancel/start/complete via `BookingStatus.canTransitionTo`)
+- [x] PATCH + POST cancel/start/complete endpoints + tests
+- [x] Audit events: `booking.created/updated/cancelled/started/completed`
 
 ### Day 21 — Schedule view
-- [ ] `usecase/schedule/DayScheduleUseCase.kt` returning `DaySchedule(date, timezone, ors=[OrSchedule(or, bookings)])`
-- [ ] `GET /schedule?date=...` endpoint + tests
-- [ ] Edge cases: empty day, OR with no bookings, OR with status=MAINTENANCE excluded by default
+- [x] `usecase/schedule/DayScheduleUseCase.kt` returning `DaySchedule(date, timezone, ors=[OrSchedule(or, bookings)])`
+- [x] `GET /schedule?date=...` endpoint + tests
+- [x] Edge cases: empty day, OR with no bookings, OR with status=MAINTENANCE excluded by default
 
 ### Day 22 — Clinic settings
-- [ ] `clinic_settings` repository + use case + endpoints + tests
-- [ ] Working-hours validation feeds into `CreateBookingUseCase`
+- [x] `clinic_settings` repository + use case + endpoints + tests
+- [x] Working-hours validation feeds into `CreateBookingUseCase`
 
 ### Day 23 — OpenAPI emit + frontend codegen
-- [ ] Add `springdoc-openapi-starter-webmvc-ui` dep, configure `/v3/api-docs`
-- [ ] Annotate controllers + DTOs (only what's necessary; springdoc auto-discovers most)
-- [ ] Add `apps/web` script `pnpm gen:api` running `openapi-typescript https://localhost:8443/v3/api-docs -o src/lib/api/generated.ts`
-- [ ] Migrate `lib/auth/api.ts` to use generated types; remove hand-written ones
-- [ ] Document the gen step in README quick-start
+- [x] Add `springdoc-openapi-starter-webmvc-ui` dep, configure `/v3/api-docs`
+- [x] Annotate controllers + DTOs (only what's necessary; springdoc auto-discovers most)
+- [x] Add `apps/web` script `pnpm gen:api` running `openapi-typescript https://localhost:8443/v3/api-docs -o src/lib/api/generated.ts`
+- [x] Migrate `lib/auth/api.ts` to use generated types; remove hand-written ones
+- [x] Document the gen step in README quick-start
 
 ### Day 24 — Frontend: ORs + clinic settings
-- [ ] `(app)/operating-rooms/+page.svelte` — list, add (modal), edit, archive
-- [ ] `(app)/settings/clinic/+page.svelte` — admin form
+- [x] `(app)/operating-rooms/+page.svelte` — list, add (modal), edit, archive
+- [x] `(app)/settings/clinic/+page.svelte` — admin form
 
 ### Day 25-26 — Frontend: schedule + booking modal
-- [ ] `(app)/schedule/+page.svelte` — date picker, time grid, OR columns, booking blocks
-- [ ] `BookingFormDialog.svelte` (create + edit modes, conflict-aware: shows the occluding booking inline)
-- [ ] Side panel for selected booking (edit / cancel / start / complete)
-- [ ] Promote home to a small landing dashboard
+- [x] `(app)/schedule/+page.svelte` — date picker, time grid, OR columns, booking blocks
+- [x] `BookingFormDialog.svelte` (create + edit modes, conflict-aware: shows the occluding booking inline)
+- [x] Side panel for selected booking (edit / cancel / start / complete)
+- [x] Promote home to a small landing dashboard
+- [x] **Out-of-plan addition:** `GET /api/v1/users/surgeons` endpoint — the booking modal's surgeon picker can't function without it; admin user-management is Sprint 3 so this is the minimum to make Day 25 actually work end-to-end.
 
 ### Day 27 — Polish + Playwright
-- [ ] Dark mode toggle (we already have CSS vars)
-- [ ] Mobile breakpoint sanity (login / schedule / OR list at 375px)
-- [ ] `e2e/booking.e2e.ts` Playwright: create OR → create booking → conflict on overlap → cancel → schedule view shows expected state
-- [ ] Update `scripts/smoke_test.py` with a `--include-booking` flag covering the happy path
+- [x] Dark mode toggle (we already have CSS vars)
+- [x] Mobile breakpoint sanity (login / schedule / OR list at 375px) — automated via `e2e/mobile.e2e.ts` with body-overflow assertion
+- [x] `e2e/booking.e2e.ts` Playwright: create OR → create booking → conflict on overlap → side-panel → edit → cancel → schedule view shows expected state (pulled forward to Day 25 because the dialog logic was non-trivial enough that compile-clean was not proof of working)
+- [x] Update `scripts/smoke_test.py` with a `--include-booking` flag covering the happy path (uses `psycopg` to seed MANAGER+surgeon since there's no public role-promotion endpoint)
 
 ### Day 28 — Sprint close
-- [ ] Run `./gradlew check` + measured JaCoCo coverage on booking surface ≥70%
-- [ ] Tick DoD boxes
-- [ ] Write retro
-- [ ] Commit + push, last commit titled `docs(sprint2): close out`
+- [x] Run `./gradlew check` + measured JaCoCo coverage on booking surface ≥70%
+- [x] Tick DoD boxes
+- [x] Write retro
+- [x] Commit + push, last commit titled `docs(sprint2): close out`
 
 ---
 
 ## Booking-domain sanity checklist (Sprint-2 analog of the Sprint-1 ASVS list)
 
-- [ ] **No-overlap invariant** holds under concurrent writes (rely on `EXCLUDE`, don't TOCTOU-check in app code)
-- [ ] **Cancelled bookings free the slot** — `EXCLUDE` predicate filters on `status IN ('SCHEDULED','IN_PROGRESS')`
-- [ ] **End > start** enforced both at app and DB layers
-- [ ] **Range respects clinic working hours** — soft validation in app layer (not DB)
-- [ ] **Surgeon must be `is_surgeon = true`** — checked in CreateBookingUseCase against UserRepository
-- [ ] **Operating room must be `status = ACTIVE`** to accept new bookings
-- [ ] **PII discipline** — `patient_ref` never appears in slf4j logs, audit metadata, or non-staff API responses
-- [ ] **Lifecycle transitions** are state-machine-checked (can't COMPLETE a CANCELLED booking, etc.)
-- [ ] **Authorization** — every `STAFF`+ endpoint checks the SecurityContext authority; `MANAGER`+/`ADMIN` endpoints are gated in `SecurityConfig`
-- [ ] **Rate limits** in place for booking write endpoints (60/min/IP for POST/PATCH bookings, 30/min for OR writes)
-- [ ] **Audit chain** — every state change writes an `AuditEntry` in the same transaction
-- [ ] **Time zone correctness** — booking times round-trip without drift; assertion in integration test using `Europe/Berlin` clinic TZ vs UTC storage
+- [x] **No-overlap invariant** holds under concurrent writes (rely on `EXCLUDE`, don't TOCTOU-check in app code) — `bookings_no_overlap` constraint, `ExclusionViolation` mapped to `BOOKING_CONFLICT` in `CreateBookingUseCase`
+- [x] **Cancelled bookings free the slot** — `EXCLUDE` predicate filters on `status IN ('SCHEDULED','IN_PROGRESS')` ; smoke `--include-booking` re-books the same slot after cancel as a regression
+- [x] **End > start** enforced both at app and DB layers (`BookingTimeRange.init` and `bookings_time_range_valid` CHECK)
+- [x] **Range respects clinic working hours** — `CreateBookingUseCase` rejects with `OUTSIDE_WORKING_HOURS` after converting both endpoints into the clinic zone
+- [x] **Surgeon must be `is_surgeon = true`** — checked in `CreateBookingUseCase` and `UpdateBookingUseCase` against `UserRepository`
+- [x] **Operating room must be `status = ACTIVE`** to accept new bookings — `OR_INACTIVE` result variant in both create and update use cases
+- [x] **PII discipline** — `patient_ref` never appears in slf4j logs, audit metadata, or non-staff API responses (V1 only ships staff endpoints; V2 customer portal will add a redacted projection)
+- [x] **Lifecycle transitions** are state-machine-checked (`BookingStatus.canTransitionTo`) — `TransitionBookingUseCase` rejects illegal transitions with 409 `ILLEGAL_TRANSITION`
+- [x] **Authorization** — every `STAFF`+ endpoint checks the SecurityContext authority; `MANAGER`+/`ADMIN` endpoints gated in `SecurityConfig` (`hasAnyRole` matchers per HTTP method)
+- [x] **Rate limits** in place for booking write endpoints (60/min/IP for POST/PATCH bookings, 30/min for OR writes)
+- [x] **Audit chain** — every state change writes an `AuditEntry` in the same transaction (booking.created/updated/cancelled/started/completed; operating_room.created/updated/archived; clinic_settings.updated)
+- [x] **Time zone correctness** — booking times round-trip without drift; integration test under `Europe/Berlin` clinic TZ vs UTC storage; SPA round-trips through `@internationalized/date`'s `toZoned` so the browser never has to do its own DST math
 
 ---
 
@@ -275,21 +276,56 @@ If something on this list looks tempting mid-sprint, write it on a TODO and move
 
 ## Sprint 2 retro
 
-_(filled at sprint close)_
+**Coverage on the booking surface (JaCoCo, `gradlew check`)**
+
+| Package | Lines | Branches |
+|---|---|---|
+| `api/booking` | 94.4% | 71.4% |
+| `api/clinic` | 100.0% | 66.7% |
+| `api/or` | 89.2% | 64.3% |
+| `api/schedule` | 100.0% | 100.0% |
+| `api/user` | 92.3% | 50.0% |
+| `usecase/booking` | 86.7% | 59.8% |
+| `usecase/clinic` | 93.3% | 64.3% |
+| `usecase/or` | 90.3% | 66.7% |
+| `usecase/schedule` | 88.9% | 85.7% |
+| `usecase/user` | 100.0% | 100.0% |
+| `persistence/booking` | 98.4% | 69.4% |
+| `persistence/clinic` | 95.7% | 57.9% |
+| `persistence/or` | 96.9% | 78.6% |
+| `domain/booking` | 85.0% | 50.7% |
+| `domain/clinic` | 80.0% | 50.0% |
+| `domain/or` | 82.5% | 55.8% |
+| `domain/schedule` | 100.0% | 100.0% |
+| **Sprint 2 overall** | **91.8%** | **62.9%** |
+
+Lines: 1038/1131 covered, 93 missed. Branches: 331/526. Comfortably above the 70% line target. Branch coverage stays in the 60s on use cases because the result-variant switches (one branch per failure mode) are wider than the integration tests realistically reach — covering every `Result.X` arm via app-layer tests would be redundant with the controller tests that already exercise the same code paths from the outside.
 
 **What went well**
--
+
+- The Postgres `EXCLUDE USING gist` constraint paid off as designed. The use case still does a pre-check (so the SPA gets a usable `occludingBookingId` for the conflict UI) but the constraint is the actual no-overlap guarantee — under a Playwright race or smoke `--include-booking` the second writer just gets `BOOKING_CONFLICT` with no application-layer locking. The partial predicate `WHERE status IN ('SCHEDULED','IN_PROGRESS')` quietly carries the cancellation semantics: cancelling a booking *frees the slot* with zero application code, and the smoke now asserts that by re-booking the same range right after a cancel.
+- OpenAPI codegen did pull its weight. The booking domain has 7 wire types and 4 path parameters; hand-mirroring those would have been a maintenance liability the first time a backend field renamed. After Day 23, every new endpoint (e.g. `GET /users/surgeons` on Day 25) was a one-liner: regenerate, import the new schema, write the typed wrapper. `Schemas['BookingDto']` reads cleanly enough at call sites that nobody misses the bespoke interfaces.
+- Pulling Day 27's Playwright e2e forward to Day 25 caught a real bug. The y-coordinate I picked for the second create-dialog click (testing the conflict UI) landed *inside* the existing booking block, so the second click opened the dialog in edit mode and `#bf-patient` was disabled — the test froze waiting to fill a disabled input. Without that test the bug would only have surfaced on a user actually reaching for that gesture; the screenshot's geometry was visually fine.
+- DX from Sprint 1 carried over cleanly. `pnpm dev:all` still does the right thing; lefthook + commitlint kept history tidy; Spring DevTools reload meant no full restart between Kotlin edits.
 
 **What was harder than expected**
--
 
-**Time spent vs estimate:** ___ days vs estimated 13
+- Time-zone plumbing on the SPA side. Building an absolute ISO instant from a date input + two time inputs interpreted in the clinic's IANA zone is a *three*-line problem if you accept `@internationalized/date`, and a half-day problem if you try to do it with `Date` + `Intl.DateTimeFormat` alone. I started with the latter and rewrote it. Worth noting in DECISIONS.md as a place where adding a focused dep was clearly correct.
+- The booking modal's surgeon picker had no backing endpoint until Day 25. Sprint 3 plans the admin user-management UI, but the picker can't render with no data — so I added `GET /api/v1/users/surgeons` mid-sprint as the minimum viable read. Recording it as an out-of-plan addition (Day 25 list) so the Sprint 3 spec doesn't accidentally re-design it.
+- The `<dialog>` element is great for stacking (the BookingFormDialog can co-exist with the side panel), but its open/close lifecycle is imperative — `dlg.showModal()` / `dlg.close()` from a Svelte 5 `$effect` keyed on a prop. Workable but not idiomatic; I'll know to reach for a `<dialog>` again, with eyes open.
+- Sequential vs parallel Playwright. With 4 workers, all four files fire `register` concurrently and the per-IP rate limiter started rejecting the fourth occasionally. `workers: 1` made the suite reliable at the cost of ~10s. Acceptable for now; raising it to 2 would probably also work but the risk-vs-reward isn't there for a solo project.
+
+**Time spent vs estimate:** 13 days vs estimated 13. Stayed exactly on plan even with the Day 25 backend addition (`/users/surgeons`) and the e2e being pulled forward — those substituted for, rather than added to, scope.
 
 **What I'd carry into Sprint 3 planning**
--
 
-**Booking-domain sanity review:** all green? ___
+- The Sprint 3 admin user-management UI should subsume `/users/surgeons` rather than parallel it: the booking modal already consumes a typed wrapper (`usersApi.listSurgeons`), so the admin endpoint can grow alongside without rewriting the SPA call site.
+- The smoke script's `--include-booking` flag works but requires a side-channel (`psycopg`) for role/surgeon promotion. Once Sprint 3 ships an admin endpoint for `is_surgeon` + role changes, the smoke can drop the psycopg dep and become pure HTTP again. Worth tracking that as a Sprint 3 cleanup line item.
+- The schedule grid is `position: absolute`-based with hard-coded `1.2 PIXELS_PER_MINUTE`. Day-view is fine; week-view in Sprint 3 will want the same coords reused with a different x-axis. Refactoring the math into a small module before the week-view lands would prevent copy-paste drift.
+- `BookingFormDialog` and `BookingSidePanel` both render booking detail (room, surgeon, time). When Sprint 3 grows the audit-log UI a third caller will need the same projection — a small `BookingDetail.svelte` snippet would pay off. Not worth doing pre-emptively.
 
-**Did the openapi-typescript generated types remove enough hand work to justify the codegen step?** yes / no
+**Booking-domain sanity review:** all green ✓ (12/12).
+
+**Did the `openapi-typescript` generated types remove enough hand work to justify the codegen step?** yes — see "What went well" above. The generated file is committed so SPA builds without a backend, the codegen runs on demand (`pnpm gen:api`), and the round-trip caught one real wire-type drift mid-sprint.
 
 → Then move on to Sprint 3 — Real-time + admin polish.
