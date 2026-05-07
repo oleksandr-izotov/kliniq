@@ -7,6 +7,9 @@ import com.kliniq.domain.booking.NewBooking
 import com.kliniq.domain.or.OperatingRoomStatus
 import com.kliniq.infra.audit.AuditEntry
 import com.kliniq.infra.audit.AuditWriter
+import com.kliniq.infra.realtime.BookingEvent
+import com.kliniq.infra.realtime.BookingEventKind
+import com.kliniq.infra.realtime.BookingEventPublisher
 import com.kliniq.persistence.booking.BookingRepository
 import com.kliniq.persistence.clinic.ClinicSettingsRepository
 import com.kliniq.persistence.or.OperatingRoomRepository
@@ -42,6 +45,7 @@ class CreateBookingUseCase(
     private val users: UserRepository,
     private val clinicSettings: ClinicSettingsRepository,
     private val auditWriter: AuditWriter,
+    private val eventPublisher: BookingEventPublisher,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -154,6 +158,18 @@ class CreateBookingUseCase(
             saved.operatingRoomId,
             saved.surgeonId,
             cmd.createdById,
+        )
+
+        // 8. Real-time fan-out. Best-effort by design; the audit row above
+        // is the durable source of truth, the SSE event is just the
+        // courtesy push to connected browsers.
+        eventPublisher.publish(
+            BookingEvent(
+                kind = BookingEventKind.CREATED,
+                bookingId = saved.id,
+                operatingRoomId = saved.operatingRoomId,
+                occurredAt = saved.updatedAt,
+            ),
         )
         return Result.Success(saved)
     }

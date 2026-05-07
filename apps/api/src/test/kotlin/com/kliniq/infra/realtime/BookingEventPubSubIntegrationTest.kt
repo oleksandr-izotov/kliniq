@@ -11,7 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.test.context.ActiveProfiles
-import org.springframework.test.context.bean.override.mockito.MockitoBean
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.util.UUID
@@ -31,8 +31,12 @@ class BookingEventPubSubIntegrationTest
         private val publisher: BookingEventPublisher,
         private val redis: StringRedisTemplate,
     ) {
-        @MockitoBean
-        private lateinit var registry: LocalEmitterRegistry
+        // Spy the real SseService so EventsController's typed dependency
+        // still resolves; SseService.broadcast is a no-op when no
+        // EventSource clients are connected, so the spy lets us verify
+        // the call without touching real SSE machinery.
+        @MockitoSpyBean
+        private lateinit var registry: SseService
 
         @Test
         fun `events flow publisher to subscriber in order`() {

@@ -101,6 +101,10 @@ class RateLimitFilter(
                 "POST:/api/v1/bookings" to Rule(60, Duration.ofMinutes(1)),
                 // Operating-room writes are rarer.
                 "POST:/api/v1/operating-rooms" to Rule(30, Duration.ofMinutes(1)),
+                // SSE: opening many EventSource streams per IP is not a
+                // normal pattern. Reverse proxies + native auto-reconnect
+                // mean a healthy session reconnects sparingly.
+                "GET:/api/v1/events" to Rule(5, Duration.ofMinutes(1)),
             )
     }
 }
