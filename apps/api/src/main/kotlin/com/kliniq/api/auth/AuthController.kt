@@ -12,6 +12,7 @@ import com.kliniq.usecase.auth.LogoutUseCase
 import com.kliniq.usecase.auth.RegisterUseCase
 import com.kliniq.usecase.auth.ResetPasswordUseCase
 import com.kliniq.usecase.auth.VerifyEmailUseCase
+import com.kliniq.usecase.invitation.AcceptInvitationUseCase
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
@@ -36,6 +37,7 @@ class AuthController(
     private val forgotPasswordUseCase: ForgotPasswordUseCase,
     private val resetPasswordUseCase: ResetPasswordUseCase,
     private val changePasswordUseCase: ChangePasswordUseCase,
+    private val acceptInvitationUseCase: AcceptInvitationUseCase,
     private val cookies: SessionCookieService,
     private val loginAttempts: LoginAttemptTracker,
     private val clock: java.time.Clock,
@@ -285,4 +287,72 @@ class AuthController(
                 ?: error("Authenticated request reached /me without KliniqAuthentication")
         return UserResponse.of(auth.user)
     }
+
+    /**
+     * Public endpoint: redeem an admin-issued invitation token, create the
+     * pre-verified user with the role + surgeon flag the admin set, and
+     * log them in. Each failure mode maps to a distinct code so the
+     * accept page can show actionable copy.
+     */
+    @PostMapping("/invitation/accept")
+    @Suppress("CyclomaticComplexMethod") // one branch per Result variant
+    fun acceptInvitation(
+        @Valid @RequestBody request: AcceptInvitationRequest,
+        response: HttpServletResponse,
+    ): ResponseEntity<*> =
+        when (
+            val result =
+                acceptInvitationUseCase.accept(
+                    AcceptInvitationUseCase.Command(
+                        token = request.token,
+                        password = request.password,
+                        displayName = request.displayName,
+                    ),
+                )
+        ) {
+            is AcceptInvitationUseCase.Result.Success -> {
+                cookies.write(response, result.session.id)
+                ResponseEntity.ok(UserResponse.of(result.user))
+            }
+            is AcceptInvitationUseCase.Result.InvalidInput ->
+                ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                    ApiErrorResponse(code = "VALIDATION_ERROR", message = result.reason),
+                )
+            AcceptInvitationUseCase.Result.InvalidToken ->
+                ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                    ApiErrorResponse(code = "INVALID_TOKEN", message = "Invitation link is invalid."),
+                )
+            AcceptInvitationUseCase.Result.Expired ->
+                ResponseEntity.status(HttpStatus.GONE).body(
+                    ApiErrorResponse(code = "INVITATION_EXPIRED", message = "Invitation has expired."),
+                )
+            AcceptInvitationUseCase.Result.Revoked ->
+                ResponseEntity.status(HttpStatus.GONE).body(
+                    ApiErrorResponse(code = "INVITATION_REVOKED", message = "Invitation has been revoked."),
+                )
+            AcceptInvitationUseCase.Result.AlreadyAccepted ->
+                ResponseEntity.status(HttpStatus.CONFLICT).body(
+                    ApiErrorResponse(
+                        code = "INVITATION_ALREADY_ACCEPTED",
+                        message = "This invitation has already been used.",
+                    ),
+                )
+            AcceptInvitationUseCase.Result.UserAlreadyExists ->
+                ResponseEntity.status(HttpStatus.CONFLICT).body(
+                    ApiErrorResponse(
+                        code = "USER_ALREADY_EXISTS",
+                        message =
+                            "A user with that email already exists. Sign in normally instead.",
+                    ),
+                )
+            AcceptInvitationUseCase.Result.PasswordBreached ->
+                ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                    ApiErrorResponse(
+                        code = "PASSWORD_BREACHED",
+                        message =
+                            "This password has appeared in a known data breach. " +
+                                "Choose a different one.",
+                    ),
+                )
+        }
 }

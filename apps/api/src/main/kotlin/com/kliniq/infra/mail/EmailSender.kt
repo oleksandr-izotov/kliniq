@@ -17,4 +17,16 @@ interface EmailSender {
         displayName: String,
         resetUrl: String,
     )
+
+    /**
+     * Notifies the recipient of an admin-issued invitation. The link
+     * lands them on the public accept page where they pick a password
+     * and display name; role / surgeon flag are pre-set from the
+     * invitation row.
+     */
+    fun sendInvitation(
+        to: String,
+        roleLabel: String,
+        acceptUrl: String,
+    )
 }

@@ -52,6 +52,54 @@ class SmtpEmailSender(
         mail.send(msg)
     }
 
+    override fun sendInvitation(
+        to: String,
+        roleLabel: String,
+        acceptUrl: String,
+    ) {
+        val msg: MimeMessage =
+            mail.createMimeMessage().also { mime ->
+                MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name()).apply {
+                    setFrom(from)
+                    setTo(to)
+                    setSubject("You're invited to Kliniq")
+                    setText(
+                        plainTextInvitation(roleLabel, acceptUrl),
+                        htmlInvitation(roleLabel, acceptUrl),
+                    )
+                }
+            }
+        mail.send(msg)
+    }
+
+    private fun plainTextInvitation(
+        roleLabel: String,
+        url: String,
+    ) = """
+        Hi,
+
+        An admin has invited you to join Kliniq as a $roleLabel.
+        To accept and pick a password, visit:
+        $url
+
+        This link expires in 7 days. If you weren't expecting this invitation,
+        ignore this email — no account is created until you click the link.
+
+        — Kliniq
+        """.trimIndent()
+
+    private fun htmlInvitation(
+        roleLabel: String,
+        url: String,
+    ) = """
+        <p>Hi,</p>
+        <p>An admin has invited you to join Kliniq as a <strong>$roleLabel</strong>.</p>
+        <p><a href="$url" style="background:#10b981;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;">Accept invitation</a></p>
+        <p>Or paste this link into your browser: <br><a href="$url">$url</a></p>
+        <p style="color:#64748b;font-size:13px;">This link expires in 7 days. If you weren't expecting this invitation, ignore this email — no account is created until you click the link.</p>
+        <p style="color:#64748b;font-size:13px;">— Kliniq</p>
+        """.trimIndent()
+
     private fun plainTextVerify(
         name: String,
         url: String,

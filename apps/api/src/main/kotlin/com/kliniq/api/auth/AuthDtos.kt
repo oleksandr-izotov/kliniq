@@ -106,3 +106,18 @@ data class UserResponse(
             )
     }
 }
+
+/**
+ * Public accept-invitation flow. Token is the plaintext from the email
+ * link; the backend hashes it before lookup and never echoes it back.
+ */
+data class AcceptInvitationRequest(
+    @field:jakarta.validation.constraints.NotBlank
+    val token: String,
+    @field:jakarta.validation.constraints.NotBlank
+    @field:jakarta.validation.constraints.Size(min = 12, max = 128)
+    val password: String,
+    @field:jakarta.validation.constraints.NotBlank
+    @field:jakarta.validation.constraints.Size(min = 1, max = 100)
+    val displayName: String,
+)

@@ -105,6 +105,11 @@ class RateLimitFilter(
                 // normal pattern. Reverse proxies + native auto-reconnect
                 // mean a healthy session reconnects sparingly.
                 "GET:/api/v1/events" to Rule(5, Duration.ofMinutes(1)),
+                // Admin invitation issue: rare and safe to bound.
+                "POST:/api/v1/admin/invitations" to Rule(30, Duration.ofMinutes(1)),
+                // Public accept: token brute-force barrier on top of
+                // sha-256 search-space.
+                "POST:/api/v1/auth/invitation/accept" to Rule(10, Duration.ofMinutes(1)),
             )
     }
 }

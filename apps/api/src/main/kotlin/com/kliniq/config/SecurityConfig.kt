@@ -57,12 +57,17 @@ class SecurityConfig {
                         "/api/v1/auth/logout",
                         "/api/v1/auth/password/forgot",
                         "/api/v1/auth/password/reset",
+                        // Public — token-bearer is the auth.
+                        "/api/v1/auth/invitation/accept",
                         // Passkey authentication ceremony is public by design —
                         // the assertion *is* the proof. Registration/listing/
                         // delete still require an authenticated session.
                         "/api/v1/auth/passkeys/authentication/begin",
                         "/api/v1/auth/passkeys/authentication/finish",
                     ).permitAll()
+                // Admin surface: invitations + (Day 33) user management +
+                // (Day 36) audit log read. ADMIN-only.
+                it.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 // Operating-room write endpoints require MANAGER+ (or ADMIN).
                 // Reads stay open to any authenticated user — staff need to
                 // see the schedule.
