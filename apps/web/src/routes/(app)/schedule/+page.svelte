@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -8,7 +8,7 @@
 	import { clinicApi, type ClinicSettingsDto } from '$lib/api/clinic';
 	import { operatingRoomsApi, type OperatingRoomDto } from '$lib/api/operatingRooms';
 	import { usersApi, type SurgeonSummaryDto } from '$lib/api/users';
-	import type { BookingDto } from '$lib/api/bookings';
+	import { bookingsApi, type BookingDto } from '$lib/api/bookings';
 	import {
 		addDays,
 		formatLocalTime,
@@ -16,6 +16,11 @@
 		timeStringToMinutes,
 		todayInZone
 	} from '$lib/util/datetime';
+	import {
+		subscribeToBookingEvents,
+		type BookingEventPayload,
+		type BookingEventStream
+	} from '$lib/util/eventSource';
 	import BookingFormDialog from '$lib/components/bookings/BookingFormDialog.svelte';
 	import BookingSidePanel from '$lib/components/bookings/BookingSidePanel.svelte';
 
@@ -43,6 +48,9 @@
 	// ---- Side panel state ------------------------------------------------
 	let selectedBooking = $state<BookingDto | null>(null);
 
+	// ---- Real-time stream ------------------------------------------------
+	let stream: BookingEventStream | null = null;
+
 	onMount(async () => {
 		try {
 			[clinic, rooms, surgeons] = await Promise.all([
@@ -52,12 +60,40 @@
 			]);
 			date = todayInZone(clinic.timezone);
 			await loadSchedule();
+			// Subscribe AFTER initial state is in place — onConnect fires on
+			// open + every reconnect and triggers a fresh schedule fetch, so
+			// any events we missed while disconnected get reconciled in the
+			// next round-trip.
+			stream = subscribeToBookingEvents({
+				onEvent: handleBookingEvent,
+				onConnect: () => void loadSchedule()
+			});
 		} catch (e) {
 			bootError = describe(e);
 		} finally {
 			loading = false;
 		}
 	});
+
+	onDestroy(() => stream?.close());
+
+	async function handleBookingEvent(event: BookingEventPayload) {
+		// Refresh the visible day (cheap; the day-view query is one round-trip).
+		void loadSchedule();
+		// If the event names the booking that's currently open in the side
+		// panel, re-fetch it so its status pill / available-actions reflect
+		// what the other tab just did. We do this in addition to the
+		// schedule refresh because the panel reads from `selectedBooking`,
+		// not from the schedule, and otherwise wouldn't pick up the change.
+		if (selectedBooking && selectedBooking.id === event.bookingId) {
+			try {
+				selectedBooking = await bookingsApi.get(event.bookingId);
+			} catch {
+				// Ignore — the next user action on the panel will surface
+				// any persistent issue.
+			}
+		}
+	}
 
 	async function loadSchedule() {
 		if (!clinic) return;

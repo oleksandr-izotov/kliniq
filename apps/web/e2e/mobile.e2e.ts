@@ -35,18 +35,25 @@ test('login + home + schedule + ORs + clinic settings stay within 375px', async 
 	await assertNoBodyHScroll(page);
 	await expect(page.locator('#email')).toBeVisible();
 
-	// Dark-mode toggle is wired in on the (auth) layout — flipping it
-	// should add `class="dark"` to <html>, and flipping again removes it.
+	// Dark-mode toggle is wired in on the (auth) layout. The handler is
+	// bound during Svelte hydration which can lag a moment behind the
+	// document's `load` event — so click-then-assert can race the first
+	// time. `expect.toPass` retries the click+assert pair until the class
+	// flips, which converges as soon as the handler is bound.
 	const html = page.locator('html');
-	const wasDark = (await html.getAttribute('class'))?.includes('dark') ?? false;
-	await page.getByRole('button', { name: 'Toggle dark mode' }).click();
-	if (wasDark) {
-		await expect(html).not.toHaveClass(/(^|\s)dark(\s|$)/);
-	} else {
-		await expect(html).toHaveClass(/(^|\s)dark(\s|$)/);
-	}
-	// Restore so subsequent screenshots aren't surprising.
-	await page.getByRole('button', { name: 'Toggle dark mode' }).click();
+	const startedDark = (await html.getAttribute('class'))?.includes('dark') ?? false;
+	await expect(async () => {
+		await page.getByRole('button', { name: 'Toggle dark mode' }).click();
+		const isDark = (await html.getAttribute('class'))?.includes('dark') ?? false;
+		if (isDark === startedDark) throw new Error('toggle had no effect yet');
+	}).toPass({ timeout: 5_000 });
+	// Restore so subsequent screenshots aren't surprising. Same toPass
+	// pattern in case the second click also races.
+	await expect(async () => {
+		await page.getByRole('button', { name: 'Toggle dark mode' }).click();
+		const isDark = (await html.getAttribute('class'))?.includes('dark') ?? false;
+		if (isDark !== startedDark) throw new Error('restore had no effect yet');
+	}).toPass({ timeout: 5_000 });
 
 	// Walk through register → verify so we have a session.
 	await gotoHydrated(page, '/register');
@@ -100,8 +107,10 @@ test('login + home + schedule + ORs + clinic settings stay within 375px', async 
 });
 
 async function assertNoBodyHScroll(page: import('@playwright/test').Page): Promise<void> {
-	// Wait a tick so any layout that runs on hydrate has settled.
-	await page.waitForLoadState('networkidle');
+	// `gotoHydrated` already returned past the 'load' boundary so layout is
+	// settled — and we can't wait for `networkidle` on the SSE-enabled
+	// routes (the long-lived /events stream means the network is never
+	// idle). Measure straight away.
 	const overflow = await page.evaluate(() => ({
 		bodyScrollWidth: document.body.scrollWidth,
 		bodyClientWidth: document.body.clientWidth,

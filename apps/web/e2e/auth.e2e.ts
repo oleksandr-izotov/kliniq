@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-import { fetchVerifyToken, gotoHydrated, uniqueEmail } from './helpers';
+import { cleanupTestData, fetchVerifyToken, gotoHydrated, uniqueEmail } from './helpers';
+
+test.beforeAll(async () => {
+	// Drop rate-limit counters left by earlier files in the run so this
+	// register doesn't share the per-IP register quota with neighbours.
+	await cleanupTestData();
+});
 
 test('register, verify, login, change password, logout — all via the SPA', async ({ page }) => {
 	const email = uniqueEmail('e2e');

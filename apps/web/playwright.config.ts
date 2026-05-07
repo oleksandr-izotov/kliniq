@@ -32,6 +32,11 @@ export default defineConfig({
 	// per-IP register/login rate limiters intermittently. Sequential runs
 	// add a few seconds for the whole suite but eliminate the flake.
 	workers: 1,
+	// Clears Redis rate-limit + login-backoff counters and stale
+	// @kliniq.test rows before any worker runs. Sequential register calls
+	// otherwise pile up against a 5/min/IP quota if the suite kicks off
+	// mid-window after an earlier run.
+	globalSetup: './e2e/globalSetup.ts',
 	testMatch: '**/*.e2e.{ts,js}',
 	projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
 });

@@ -67,8 +67,10 @@ export const uniqueEmail = (prefix: string): string =>
  * -------------------------------------------------------------------------- */
 
 import { Client } from 'pg';
+import { createClient as createRedisClient } from 'redis';
 
 const DEV_PG_URL = 'postgres://kliniq:kliniq_dev_only@localhost:55432/kliniq';
+const DEV_REDIS_URL = 'redis://localhost:6379';
 
 async function withClient<T>(fn: (c: Client) => Promise<T>): Promise<T> {
 	const c = new Client({ connectionString: DEV_PG_URL });
@@ -104,13 +106,32 @@ export async function promoteUser(
  * Drop test artefacts from previous runs so tests stay independent without
  * a full DB reset between them. Targets fixtures created by the e2e suite
  * by email/code prefix; production-shaped rows are left alone.
+ *
+ * Also clears the per-IP rate-limit counters in Redis. With `workers: 1`
+ * the suite registers ~5 fresh users back-to-back in well under a minute,
+ * which is exactly the `POST /auth/register` quota — leaving the
+ * counters intact between files made the back of the suite flaky.
  */
 export async function cleanupTestData(): Promise<void> {
 	await withClient(async (c) => {
 		await c.query("DELETE FROM bookings WHERE patient_ref LIKE 'P-9999-%'");
 		await c.query("DELETE FROM operating_rooms WHERE code LIKE 'E2E-%'");
+		await c.query("DELETE FROM user_invitations WHERE email_normalized LIKE '%@kliniq.test'");
 		await c.query("DELETE FROM users WHERE email_normalized LIKE '%@kliniq.test'");
 	});
+	const redis = createRedisClient({ url: DEV_REDIS_URL });
+	await redis.connect();
+	try {
+		// Drop rate-limit counters and login-backoff keys but leave session
+		// cookies alone — concurrent dev sessions on the same Redis stay
+		// alive while the e2e suite runs.
+		for (const pattern of ['rate-limit:*', 'kliniq:login-backoff:*']) {
+			const keys = await redis.keys(pattern);
+			if (keys.length > 0) await redis.del(keys);
+		}
+	} finally {
+		await redis.quit();
+	}
 }
 
 /**
@@ -119,10 +140,19 @@ export async function cleanupTestData(): Promise<void> {
  * submit button before Svelte has bound its onsubmit handler — in which
  * case the browser does the default-action POST instead, the SPA
  * never sees the response, and the test sees no UI update.
+ *
+ * `'load'` triggers once the document and its bundle have loaded, but
+ * Svelte 5 runs hydration on the next tick, so click-then-assert can
+ * still race. `mode-watcher` writes `data-theme` on `<html>` during
+ * hydration regardless of the resolved theme; using its presence as a
+ * "hydration is done" signal avoids both the SSE-blocks-networkidle
+ * problem on the authenticated routes and the brittle fixed-sleep
+ * fallback.
  */
 import type { Page } from '@playwright/test';
 
 export async function gotoHydrated(page: Page, path: string): Promise<void> {
 	await page.goto(path);
-	await page.waitForLoadState('networkidle');
+	await page.waitForLoadState('load');
+	await page.waitForFunction(() => document.documentElement.hasAttribute('data-theme'));
 }

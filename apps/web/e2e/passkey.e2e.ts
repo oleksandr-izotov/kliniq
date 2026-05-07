@@ -1,12 +1,17 @@
 import { expect, test } from '@playwright/test';
 
-import { fetchVerifyToken, gotoHydrated, uniqueEmail } from './helpers';
+import { cleanupTestData, fetchVerifyToken, gotoHydrated, uniqueEmail } from './helpers';
 
 /**
  * Drives the full passkey UX against Chromium's CDP-backed virtual
  * authenticator: register a fresh account, add a passkey from the
  * settings page, sign out, sign back in via "Sign in with a passkey".
  */
+test.beforeAll(async () => {
+	// Drop rate-limit counters from prior files in the suite so this
+	// file's register doesn't share the per-IP quota.
+	await cleanupTestData();
+});
 test('register a passkey and sign back in with it via the virtual authenticator', async ({
 	page,
 	context
