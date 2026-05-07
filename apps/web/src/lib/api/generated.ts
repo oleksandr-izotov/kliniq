@@ -260,6 +260,38 @@ export interface paths {
 		readonly patch?: never;
 		readonly trace?: never;
 	};
+	readonly '/api/v1/auth/invitation/accept': {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly get?: never;
+		readonly put?: never;
+		readonly post: operations['acceptInvitation'];
+		readonly delete?: never;
+		readonly options?: never;
+		readonly head?: never;
+		readonly patch?: never;
+		readonly trace?: never;
+	};
+	readonly '/api/v1/admin/invitations': {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly get: operations['list_2'];
+		readonly put?: never;
+		readonly post: operations['create_2'];
+		readonly delete?: never;
+		readonly options?: never;
+		readonly head?: never;
+		readonly patch?: never;
+		readonly trace?: never;
+	};
 	readonly '/api/v1/operating-rooms/{id}': {
 		readonly parameters: {
 			readonly query?: never;
@@ -324,6 +356,22 @@ export interface paths {
 		readonly patch: operations['rename'];
 		readonly trace?: never;
 	};
+	readonly '/api/v1/admin/users/{id}': {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly get?: never;
+		readonly put?: never;
+		readonly post?: never;
+		readonly delete?: never;
+		readonly options?: never;
+		readonly head?: never;
+		readonly patch: operations['patch'];
+		readonly trace?: never;
+	};
 	readonly '/api/v1/users/surgeons': {
 		readonly parameters: {
 			readonly query?: never;
@@ -356,6 +404,22 @@ export interface paths {
 		readonly patch?: never;
 		readonly trace?: never;
 	};
+	readonly '/api/v1/events': {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly get: operations['subscribe'];
+		readonly put?: never;
+		readonly post?: never;
+		readonly delete?: never;
+		readonly options?: never;
+		readonly head?: never;
+		readonly patch?: never;
+		readonly trace?: never;
+	};
 	readonly '/api/v1/auth/passkeys': {
 		readonly parameters: {
 			readonly query?: never;
@@ -363,7 +427,7 @@ export interface paths {
 			readonly path?: never;
 			readonly cookie?: never;
 		};
-		readonly get: operations['list_2'];
+		readonly get: operations['list_3'];
 		readonly put?: never;
 		readonly post?: never;
 		readonly delete?: never;
@@ -383,6 +447,38 @@ export interface paths {
 		readonly put?: never;
 		readonly post?: never;
 		readonly delete?: never;
+		readonly options?: never;
+		readonly head?: never;
+		readonly patch?: never;
+		readonly trace?: never;
+	};
+	readonly '/api/v1/admin/users': {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly get: operations['list_4'];
+		readonly put?: never;
+		readonly post?: never;
+		readonly delete?: never;
+		readonly options?: never;
+		readonly head?: never;
+		readonly patch?: never;
+		readonly trace?: never;
+	};
+	readonly '/api/v1/admin/invitations/{id}': {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly get?: never;
+		readonly put?: never;
+		readonly post?: never;
+		readonly delete: operations['revoke_1'];
 		readonly options?: never;
 		readonly head?: never;
 		readonly patch?: never;
@@ -500,6 +596,24 @@ export interface components {
 			readonly email: string;
 			readonly password: string;
 		};
+		readonly AcceptInvitationRequest: {
+			readonly token: string;
+			readonly password: string;
+			readonly displayName: string;
+		};
+		readonly CreateInvitationRequest: {
+			readonly email: string;
+			/** @enum {string} */
+			readonly role: 'ADMIN' | 'MANAGER' | 'STAFF';
+			readonly isSurgeon: boolean;
+			/** @enum {string} */
+			readonly specialty?:
+				| 'CARDIOLOGY'
+				| 'ORTHOPEDICS'
+				| 'GENERAL'
+				| 'NEUROSURGERY'
+				| 'OPHTHALMOLOGY';
+		};
 		readonly UpdateOperatingRoomRequest: {
 			readonly name: string;
 			readonly notes: string;
@@ -530,6 +644,20 @@ export interface components {
 		};
 		readonly RenamePasskeyRequest: {
 			readonly deviceName: string;
+		};
+		readonly UpdateUserAdminRequest: {
+			/** @enum {string} */
+			readonly role: 'ADMIN' | 'MANAGER' | 'STAFF';
+			readonly isSurgeon: boolean;
+			/** @enum {string} */
+			readonly specialty:
+				| 'CARDIOLOGY'
+				| 'ORTHOPEDICS'
+				| 'GENERAL'
+				| 'NEUROSURGERY'
+				| 'OPHTHALMOLOGY';
+			/** @enum {string} */
+			readonly status: 'ACTIVE' | 'DISABLED';
 		};
 		readonly SurgeonSummaryDto: {
 			/** Format: uuid */
@@ -594,6 +722,10 @@ export interface components {
 			/** Format: date-time */
 			readonly updatedAt: string;
 		};
+		readonly SseEmitter: {
+			/** Format: int64 */
+			readonly timeout: number;
+		};
 		readonly ClinicSettingsDto: {
 			readonly name: string;
 			readonly timezone: string;
@@ -634,6 +766,74 @@ export interface components {
 			readonly emailVerifiedAt?: string;
 			/** Format: date-time */
 			readonly createdAt: string;
+		};
+		readonly AdminUserListQuery: {
+			readonly q?: string;
+			/** @enum {string} */
+			readonly role?: 'ADMIN' | 'MANAGER' | 'STAFF';
+			readonly isSurgeon?: boolean;
+			/** @enum {string} */
+			readonly status?: 'ACTIVE' | 'DISABLED';
+			/** Format: int32 */
+			readonly page: number;
+			/** Format: int32 */
+			readonly pageSize: number;
+		};
+		readonly AdminUserDto: {
+			/** Format: uuid */
+			readonly id: string;
+			readonly email: string;
+			readonly displayName: string;
+			/** @enum {string} */
+			readonly role: 'ADMIN' | 'MANAGER' | 'STAFF';
+			readonly isSurgeon: boolean;
+			/** @enum {string} */
+			readonly specialty?:
+				| 'CARDIOLOGY'
+				| 'ORTHOPEDICS'
+				| 'GENERAL'
+				| 'NEUROSURGERY'
+				| 'OPHTHALMOLOGY';
+			/** @enum {string} */
+			readonly status: 'ACTIVE' | 'DISABLED';
+			/** Format: date-time */
+			readonly emailVerifiedAt?: string;
+			/** Format: date-time */
+			readonly createdAt: string;
+		};
+		readonly AdminUserPageDto: {
+			readonly items: readonly components['schemas']['AdminUserDto'][];
+			/** Format: int32 */
+			readonly page: number;
+			/** Format: int32 */
+			readonly pageSize: number;
+			/** Format: int32 */
+			readonly total: number;
+		};
+		readonly InvitationDto: {
+			/** Format: uuid */
+			readonly id: string;
+			readonly email: string;
+			/** @enum {string} */
+			readonly role: 'ADMIN' | 'MANAGER' | 'STAFF';
+			readonly isSurgeon: boolean;
+			/** @enum {string} */
+			readonly specialty?:
+				| 'CARDIOLOGY'
+				| 'ORTHOPEDICS'
+				| 'GENERAL'
+				| 'NEUROSURGERY'
+				| 'OPHTHALMOLOGY';
+			/** Format: uuid */
+			readonly issuedById: string;
+			/** Format: date-time */
+			readonly issuedAt: string;
+			/** Format: date-time */
+			readonly expiresAt: string;
+			/** Format: date-time */
+			readonly acceptedAt?: string;
+			/** Format: date-time */
+			readonly revokedAt?: string;
 		};
 	};
 	responses: never;
@@ -1066,6 +1266,76 @@ export interface operations {
 			};
 		};
 	};
+	readonly acceptInvitation: {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly requestBody: {
+			readonly content: {
+				readonly 'application/json': components['schemas']['AcceptInvitationRequest'];
+			};
+		};
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly '*/*': Record<string, never>;
+				};
+			};
+		};
+	};
+	readonly list_2: {
+		readonly parameters: {
+			readonly query?: {
+				readonly includeHistory?: boolean;
+			};
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly requestBody?: never;
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly '*/*': readonly components['schemas']['InvitationDto'][];
+				};
+			};
+		};
+	};
+	readonly create_2: {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly requestBody: {
+			readonly content: {
+				readonly 'application/json': components['schemas']['CreateInvitationRequest'];
+			};
+		};
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly '*/*': Record<string, never>;
+				};
+			};
+		};
+	};
 	readonly get: {
 		readonly parameters: {
 			readonly query?: never;
@@ -1276,6 +1546,32 @@ export interface operations {
 			};
 		};
 	};
+	readonly patch: {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path: {
+				readonly id: string;
+			};
+			readonly cookie?: never;
+		};
+		readonly requestBody: {
+			readonly content: {
+				readonly 'application/json': components['schemas']['UpdateUserAdminRequest'];
+			};
+		};
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly '*/*': Record<string, never>;
+				};
+			};
+		};
+	};
 	readonly listSurgeons: {
 		readonly parameters: {
 			readonly query?: never;
@@ -1319,7 +1615,27 @@ export interface operations {
 			};
 		};
 	};
-	readonly list_2: {
+	readonly subscribe: {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly requestBody?: never;
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly 'text/event-stream': components['schemas']['SseEmitter'];
+				};
+			};
+		};
+	};
+	readonly list_3: {
 		readonly parameters: {
 			readonly query?: never;
 			readonly header?: never;
@@ -1355,6 +1671,50 @@ export interface operations {
 				};
 				content: {
 					readonly '*/*': components['schemas']['UserResponse'];
+				};
+			};
+		};
+	};
+	readonly list_4: {
+		readonly parameters: {
+			readonly query: {
+				readonly query: components['schemas']['AdminUserListQuery'];
+			};
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly requestBody?: never;
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly '*/*': components['schemas']['AdminUserPageDto'];
+				};
+			};
+		};
+	};
+	readonly revoke_1: {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path: {
+				readonly id: string;
+			};
+			readonly cookie?: never;
+		};
+		readonly requestBody?: never;
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly '*/*': Record<string, never>;
 				};
 			};
 		};
