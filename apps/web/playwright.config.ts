@@ -38,5 +38,23 @@ export default defineConfig({
 	// mid-window after an earlier run.
 	globalSetup: './e2e/globalSetup.ts',
 	testMatch: '**/*.e2e.{ts,js}',
-	projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
+	// Firefox and WebKit catch real cross-engine bugs that chromium-only runs
+	// miss — primarily Safari quirks (autofocus timing, dialog focus traps,
+	// EventSource semantics on mobile-mode rendering) since WebKit on macOS is
+	// the iOS Safari engine. The passkey suite is chromium-only by structural
+	// necessity: it drives `WebAuthn.addVirtualAuthenticator` over CDP, which
+	// Firefox and WebKit don't expose.
+	projects: [
+		{ name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+		{
+			name: 'firefox',
+			use: { ...devices['Desktop Firefox'] },
+			testIgnore: '**/passkey.e2e.ts'
+		},
+		{
+			name: 'webkit',
+			use: { ...devices['Desktop Safari'] },
+			testIgnore: '**/passkey.e2e.ts'
+		}
+	]
 });
