@@ -74,22 +74,22 @@ services:
     # The API image is built and pushed by the `api-image` job in
     # `.github/workflows/ci.yml` on every merge to main. jOOQ codegen
     # needs a live Postgres at compile time, which Coolify's bare
-    # `docker compose build` doesn't have, so we bake the JAR into the
-    # image in CI and Coolify just pulls + runs.
+    # `docker compose build` doesn't have — that's why we bake the JAR
+    # into the image in CI and just pull + run here.
     #
-    # `build:` is kept for local prod-image testing only — that path
-    # expects the operator to have run `./gradlew :bootJar` first, since
-    # the Dockerfile only COPYs the prebuilt JAR. Compose tags the local
-    # build with the same name, so subsequent `up` finds it locally and
-    # skips the pull. In Coolify the image isn't built — the deploy
-    # toggles "pull on deploy" which fetches `:latest` from GHCR.
+    # No `build:` block: Compose interprets the presence of `build:` as
+    # "always build this service", and Coolify launches its deploy as
+    # `docker compose ... build --pull` which would then trip on the
+    # absent build/libs/*.jar in the deploy server's checkout. With only
+    # `image:`, Compose pulls the tag and skips the build entirely.
     #
-    # Make the GitHub package public after the first GHA push so Coolify
-    # can pull anonymously, no registry credentials needed.
+    # Local prod-image testing flow (the one the file used to support):
+    #   1. ./gradlew -p apps/api :bootJar
+    #   2. docker build -t ghcr.io/oleksandr-izotov/kliniq-api:latest -f apps/api/Dockerfile apps/api/
+    #   3. docker compose -f compose.prod.yaml up
+    # The `up` finds the locally-tagged image and skips the pull, same
+    # net effect as Coolify pulling from GHCR.
     image: ghcr.io/oleksandr-izotov/kliniq-api:latest
-    build:
-      context: ./apps/api
-      dockerfile: Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
