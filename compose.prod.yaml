@@ -71,6 +71,22 @@ services:
       - kliniq-prod-net
 
   api:
+    # The API image is built and pushed by the `api-image` job in
+    # `.github/workflows/ci.yml` on every merge to main. jOOQ codegen
+    # needs a live Postgres at compile time, which Coolify's bare
+    # `docker compose build` doesn't have, so we bake the JAR into the
+    # image in CI and Coolify just pulls + runs.
+    #
+    # `build:` is kept for local prod-image testing only — that path
+    # expects the operator to have run `./gradlew :bootJar` first, since
+    # the Dockerfile only COPYs the prebuilt JAR. Compose tags the local
+    # build with the same name, so subsequent `up` finds it locally and
+    # skips the pull. In Coolify the image isn't built — the deploy
+    # toggles "pull on deploy" which fetches `:latest` from GHCR.
+    #
+    # Make the GitHub package public after the first GHA push so Coolify
+    # can pull anonymously, no registry credentials needed.
+    image: ghcr.io/oleksandr-izotov/kliniq-api:latest
     build:
       context: ./apps/api
       dockerfile: Dockerfile

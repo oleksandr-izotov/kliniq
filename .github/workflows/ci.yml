@@ -79,6 +79,89 @@ jobs:
           path: apps/api/build/reports/tests/test
 
   # ---------------------------------------------------------------------------
+  # API container image — builds the bootJar against the same Postgres-service
+  # pattern as the test job (jOOQ codegen is non-negotiable in this stack), then
+  # ships the runtime image to GHCR. Only fires on push to main; PR builds stop
+  # at the test+lint matrix above. Needs `api` to be green so we don't publish
+  # an image whose own tests fail.
+  # ---------------------------------------------------------------------------
+  api-image:
+    name: api · build & push image
+    needs: api
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: kliniq
+          POSTGRES_USER: kliniq
+          POSTGRES_PASSWORD: kliniq_dev_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kliniq -d kliniq"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ORG_GRADLE_PROJECT_dbPort: '5432'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # bootJar pulls in flywayMigrate → generateJooq → compileKotlin
+      # transitively, so the single task is enough to produce the runnable
+      # fat JAR under build/libs/.
+      - name: Build bootJar
+        working-directory: apps/api
+        run: ./gradlew bootJar
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The repo path component of the GHCR image name MUST be lowercase;
+      # `github.repository` already is for our repo, but normalising here
+      # protects future contributors with mixed-case usernames.
+      - name: Resolve image name
+        id: img
+        run: |
+          repo_lc="${GITHUB_REPOSITORY,,}"
+          echo "image=ghcr.io/${repo_lc}-api" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push image
+        uses: docker/build-push-action@v5
+        with:
+          context: apps/api
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.img.outputs.image }}:latest
+            ${{ steps.img.outputs.image }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
   # Frontend (SvelteKit + TypeScript) — lint, typecheck, unit tests.
   # E2E (playwright) is not run in CI yet; deferred until V1 has real flows.
   # ---------------------------------------------------------------------------
