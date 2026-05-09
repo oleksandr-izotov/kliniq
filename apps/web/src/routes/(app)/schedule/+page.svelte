@@ -4,7 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { ApiError_ } from '$lib/auth/api';
-	import { scheduleApi, type ScheduleDto } from '$lib/api/schedule';
+	import { scheduleApi, type ScheduleDto, type WeekScheduleDto } from '$lib/api/schedule';
 	import { clinicApi, type ClinicSettingsDto } from '$lib/api/clinic';
 	import { operatingRoomsApi, type OperatingRoomDto } from '$lib/api/operatingRooms';
 	import { usersApi, type SurgeonSummaryDto } from '$lib/api/users';
@@ -31,8 +31,12 @@
 	let rooms = $state<readonly OperatingRoomDto[]>([]);
 	let surgeons = $state<readonly SurgeonSummaryDto[]>([]);
 	let schedule = $state<ScheduleDto | null>(null);
+	let weekSchedule = $state<WeekScheduleDto | null>(null);
 
+	let view = $state<'day' | 'week'>('day');
 	let date = $state(''); // YYYY-MM-DD; populated once we know the clinic zone
+	let weekFrom = $state(''); // YYYY-MM-DD; first day of the week
+	let weekOrId = $state<string | null>(null); // OR currently picked for the week-view
 	let loading = $state(true);
 	let scheduleLoading = $state(false);
 	let bootError = $state<string | null>(null);
@@ -59,6 +63,8 @@
 				usersApi.listSurgeons()
 			]);
 			date = todayInZone(clinic.timezone);
+			weekFrom = date;
+			weekOrId = rooms[0]?.id ?? null;
 			await loadSchedule();
 			// Subscribe AFTER initial state is in place — onConnect fires on
 			// open + every reconnect and triggers a fresh schedule fetch, so
@@ -99,12 +105,27 @@
 		if (!clinic) return;
 		scheduleLoading = true;
 		try {
-			schedule = await scheduleApi.day(date);
+			if (view === 'week' && weekOrId) {
+				weekSchedule = await scheduleApi.week(weekOrId, weekFrom);
+			} else {
+				schedule = await scheduleApi.day(date);
+			}
 		} catch (e) {
 			toast.error(describe(e));
 		} finally {
 			scheduleLoading = false;
 		}
+	}
+
+	function setView(next: 'day' | 'week') {
+		if (next === view) return;
+		view = next;
+		void loadSchedule();
+	}
+
+	function shiftWeek(deltaDays: number) {
+		weekFrom = addDays(weekFrom, deltaDays);
+		void loadSchedule();
 	}
 
 	function describe(e: unknown): string {
@@ -139,16 +160,20 @@
 		return ticks;
 	});
 
+	const tz = $derived(view === 'week' ? weekSchedule?.timezone : schedule?.timezone);
+
 	function bookingTop(b: BookingDto): number {
-		if (!schedule) return 0;
-		const m = localMinutesOfDay(b.startsAt, schedule.timezone);
+		const zone = tz;
+		if (!zone) return 0;
+		const m = localMinutesOfDay(b.startsAt, zone);
 		return Math.max(0, m - startMin) * PIXELS_PER_MINUTE;
 	}
 
 	function bookingHeight(b: BookingDto): number {
-		if (!schedule) return 0;
-		const s = localMinutesOfDay(b.startsAt, schedule.timezone);
-		const e = localMinutesOfDay(b.endsAt, schedule.timezone);
+		const zone = tz;
+		if (!zone) return 0;
+		const s = localMinutesOfDay(b.startsAt, zone);
+		const e = localMinutesOfDay(b.endsAt, zone);
 		return Math.max(20, (e - s) * PIXELS_PER_MINUTE);
 	}
 
@@ -166,7 +191,7 @@
 	}
 
 	// ---- Click handling --------------------------------------------------
-	function openCreate(roomId: string, event: MouseEvent) {
+	function openCreate(roomId: string, prefilledDate: string, event: MouseEvent) {
 		const target = event.currentTarget as HTMLElement;
 		const rect = target.getBoundingClientRect();
 		const offsetMin = Math.round((event.clientY - rect.top) / PIXELS_PER_MINUTE);
@@ -176,7 +201,7 @@
 		const time = `${Math.floor(m / 60)
 			.toString()
 			.padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}`;
-		dialogPrefill = { date, time, operatingRoomId: roomId };
+		dialogPrefill = { date: prefilledDate, time, operatingRoomId: roomId };
 		dialogExisting = undefined;
 		dialogMode = 'create';
 		dialogOpen = true;
@@ -237,31 +262,93 @@
 				{/if}
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
-				<Button variant="outline" size="sm" onclick={() => shiftDate(-1)} disabled={loading}>
-					← Prev
-				</Button>
-				<Input
-					type="date"
-					bind:value={date}
-					onchange={dateChanged}
-					disabled={loading}
-					class="w-44"
-				/>
-				<Button variant="outline" size="sm" onclick={() => shiftDate(1)} disabled={loading}>
-					Next →
-				</Button>
-				<Button
-					variant="outline"
-					size="sm"
-					onclick={() => {
-						if (!clinic) return;
-						date = todayInZone(clinic.timezone);
-						void loadSchedule();
-					}}
-					disabled={loading}
-				>
-					Today
-				</Button>
+				<!-- View toggle -->
+				<div class="flex overflow-hidden rounded-md border border-input">
+					<button
+						type="button"
+						class="px-3 py-1 text-sm {view === 'day'
+							? 'bg-primary text-primary-foreground'
+							: 'bg-background hover:bg-muted'}"
+						onclick={() => setView('day')}
+						aria-pressed={view === 'day'}
+					>
+						Day
+					</button>
+					<button
+						type="button"
+						class="px-3 py-1 text-sm {view === 'week'
+							? 'bg-primary text-primary-foreground'
+							: 'bg-background hover:bg-muted'}"
+						onclick={() => setView('week')}
+						aria-pressed={view === 'week'}
+					>
+						Week
+					</button>
+				</div>
+
+				{#if view === 'day'}
+					<Button variant="outline" size="sm" onclick={() => shiftDate(-1)} disabled={loading}>
+						← Prev
+					</Button>
+					<Input
+						type="date"
+						bind:value={date}
+						onchange={dateChanged}
+						disabled={loading}
+						class="w-44"
+					/>
+					<Button variant="outline" size="sm" onclick={() => shiftDate(1)} disabled={loading}>
+						Next →
+					</Button>
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => {
+							if (!clinic) return;
+							date = todayInZone(clinic.timezone);
+							void loadSchedule();
+						}}
+						disabled={loading}
+					>
+						Today
+					</Button>
+				{:else}
+					<select
+						bind:value={weekOrId}
+						onchange={loadSchedule}
+						disabled={loading || rooms.length === 0}
+						class="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+					>
+						{#each rooms as r (r.id)}
+							<option value={r.id}>{r.code} · {r.name}</option>
+						{/each}
+					</select>
+					<Button variant="outline" size="sm" onclick={() => shiftWeek(-7)} disabled={loading}>
+						← Prev
+					</Button>
+					<Input
+						type="date"
+						bind:value={weekFrom}
+						onchange={loadSchedule}
+						disabled={loading}
+						class="w-44"
+					/>
+					<Button variant="outline" size="sm" onclick={() => shiftWeek(7)} disabled={loading}>
+						Next →
+					</Button>
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => {
+							if (!clinic) return;
+							weekFrom = todayInZone(clinic.timezone);
+							void loadSchedule();
+						}}
+						disabled={loading}
+					>
+						This week
+					</Button>
+				{/if}
 			</div>
 		</header>
 
@@ -274,14 +361,14 @@
 			>
 				{bootError}
 			</p>
-		{:else if !schedule || schedule.operatingRooms.length === 0}
+		{:else if rooms.length === 0}
 			<div class="rounded-2xl border p-8 text-center">
 				<p class="text-sm text-muted-foreground">
 					No operating rooms to show. <a href="/operating-rooms" class="underline">Add one</a> to start
 					scheduling.
 				</p>
 			</div>
-		{:else}
+		{:else if view === 'day' && schedule}
 			<div class="overflow-x-auto rounded-2xl border">
 				<div class="flex min-w-max">
 					<!-- Time gutter -->
@@ -320,7 +407,7 @@
 							<div
 								class="relative w-full cursor-cell hover:bg-muted/30"
 								style:height="{totalPx}px"
-								onclick={(e) => openCreate(or.id, e)}
+								onclick={(e) => openCreate(or.id, date, e)}
 								aria-label="Create booking in {or.code}"
 							>
 								<!-- Hour grid lines -->
@@ -348,6 +435,89 @@
 											{formatLocalTime(b.startsAt, schedule.timezone)}–{formatLocalTime(
 												b.endsAt,
 												schedule.timezone
+											)}
+										</span>
+										<span class="block truncate text-muted-foreground">{b.opType}</span>
+									</button>
+								{/each}
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+
+			{#if scheduleLoading}
+				<p class="text-xs text-muted-foreground">Refreshing…</p>
+			{/if}
+		{:else if view === 'week' && weekSchedule}
+			{@const ws = weekSchedule}
+			<div class="overflow-x-auto rounded-2xl border">
+				<div class="flex min-w-max">
+					<!-- Time gutter (same as day-view) -->
+					<div class="w-16 shrink-0 border-r bg-muted/40">
+						<div class="flex h-12 items-center justify-center border-b border-border text-xs">
+							{ws.operatingRoom.code}
+						</div>
+						<div class="relative" style:height="{totalPx}px">
+							{#each hourTicks as t (t.minute)}
+								<div
+									class="absolute -translate-y-1/2 px-2 text-right text-xs text-muted-foreground"
+									style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px"
+								>
+									{t.label}
+								</div>
+							{/each}
+						</div>
+					</div>
+
+					<!-- Per-day columns (always 7) -->
+					{#each ws.days as day (day.date)}
+						<div
+							class="w-44 shrink-0 border-r border-border last:border-r-0"
+							data-testid="week-col-{day.date}"
+						>
+							<div
+								class="flex h-12 flex-col items-center justify-center border-b border-border px-2"
+							>
+								<span class="text-xs text-muted-foreground">
+									{new Date(`${day.date}T00:00:00Z`).toLocaleDateString(undefined, {
+										weekday: 'short',
+										timeZone: 'UTC'
+									})}
+								</span>
+								<span class="text-sm font-medium">{day.date.slice(5)}</span>
+							</div>
+							<!-- svelte-ignore a11y_click_events_have_key_events -->
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<div
+								class="relative w-full cursor-cell hover:bg-muted/30"
+								style:height="{totalPx}px"
+								onclick={(e) => openCreate(ws.operatingRoom.id, day.date, e)}
+								aria-label="Create booking on {day.date} in {ws.operatingRoom.code}"
+							>
+								{#each hourTicks as t (t.minute)}
+									<div
+										class="pointer-events-none absolute right-0 left-0 border-t border-border/50"
+										style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px"
+									></div>
+								{/each}
+								{#each day.bookings as b (b.id)}
+									<button
+										type="button"
+										class="absolute right-1 left-1 cursor-pointer rounded border px-2 py-1 text-left text-xs shadow-sm {statusColor(
+											b.status
+										)} {selectedBooking?.id === b.id ? 'ring-2 ring-primary' : ''}"
+										style:top="{bookingTop(b)}px"
+										style:height="{bookingHeight(b)}px"
+										onclick={(e) => {
+											e.stopPropagation();
+											selectBooking(b);
+										}}
+									>
+										<span class="block font-medium">
+											{formatLocalTime(b.startsAt, ws.timezone)}–{formatLocalTime(
+												b.endsAt,
+												ws.timezone
 											)}
 										</span>
 										<span class="block truncate text-muted-foreground">{b.opType}</span>

@@ -27,3 +27,24 @@ data class OrSchedule(
     val operatingRoom: OperatingRoom,
     val bookings: List<Booking>,
 )
+
+/**
+ * Seven consecutive days of one operating room's schedule. The week is
+ * always exactly 7 entries, starting from [from], computed in the
+ * clinic's local zone — so a `from = 2026-07-01` request always returns
+ * 2026-07-01 through 2026-07-07 regardless of viewer.
+ *
+ * Like [DaySchedule], cancelled and completed bookings are included; the
+ * SPA greys them out client-side.
+ */
+data class WeekSchedule(
+    val operatingRoom: OperatingRoom,
+    val timezone: ZoneId,
+    val from: LocalDate,
+    val days: List<DayBookings>,
+)
+
+data class DayBookings(
+    val date: LocalDate,
+    val bookings: List<Booking>,
+)

@@ -420,6 +420,22 @@ export interface paths {
 		readonly patch?: never;
 		readonly trace?: never;
 	};
+	readonly '/api/v1/schedule/week': {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly get: operations['week'];
+		readonly put?: never;
+		readonly post?: never;
+		readonly delete?: never;
+		readonly options?: never;
+		readonly head?: never;
+		readonly patch?: never;
+		readonly trace?: never;
+	};
 	readonly '/api/v1/events': {
 		readonly parameters: {
 			readonly query?: never;
@@ -1708,6 +1724,29 @@ export interface operations {
 				};
 				content: {
 					readonly '*/*': components['schemas']['ScheduleDto'];
+				};
+			};
+		};
+	};
+	readonly week: {
+		readonly parameters: {
+			readonly query: {
+				readonly operatingRoomId: string;
+				readonly from: string;
+			};
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly requestBody?: never;
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly '*/*': Record<string, never>;
 				};
 			};
 		};

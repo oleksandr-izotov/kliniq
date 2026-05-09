@@ -276,4 +276,75 @@ class ScheduleControllerIntegrationTest
                 .get("/api/v1/schedule?date=2026-07-01")
                 .andExpect { status { isUnauthorized() } }
         }
+
+        // ---- Week view -------------------------------------------------------
+
+        @Test
+        fun `week returns exactly 7 days, ordered, with bookings grouped by clinic-local date`() {
+            // Two bookings on the same Monday (2099-06-01 in UTC); one on Wednesday.
+            seedBooking(
+                activeOrId,
+                OffsetDateTime.of(2099, 6, 1, 9, 0, 0, 0, java.time.ZoneOffset.UTC),
+                OffsetDateTime.of(2099, 6, 1, 10, 0, 0, 0, java.time.ZoneOffset.UTC),
+                "P-2099-001",
+            )
+            seedBooking(
+                activeOrId,
+                OffsetDateTime.of(2099, 6, 1, 11, 0, 0, 0, java.time.ZoneOffset.UTC),
+                OffsetDateTime.of(2099, 6, 1, 12, 0, 0, 0, java.time.ZoneOffset.UTC),
+                "P-2099-002",
+            )
+            seedBooking(
+                activeOrId,
+                OffsetDateTime.of(2099, 6, 3, 9, 0, 0, 0, java.time.ZoneOffset.UTC),
+                OffsetDateTime.of(2099, 6, 3, 10, 0, 0, 0, java.time.ZoneOffset.UTC),
+                "P-2099-003",
+            )
+
+            mockMvc
+                .get("/api/v1/schedule/week?operatingRoomId=$activeOrId&from=2099-06-01") {
+                    cookie(cookie(staffCookie))
+                }.andExpect {
+                    status { isOk() }
+                    jsonPath("$.from") { value("2099-06-01") }
+                    jsonPath("$.operatingRoom.id") { value(activeOrId.toString()) }
+                    jsonPath("$.days.length()") { value(7) }
+                    jsonPath("$.days[0].date") { value("2099-06-01") }
+                    jsonPath("$.days[0].bookings.length()") { value(2) }
+                    jsonPath("$.days[1].bookings.length()") { value(0) }
+                    jsonPath("$.days[2].bookings.length()") { value(1) }
+                    jsonPath("$.days[6].date") { value("2099-06-07") }
+                }
+        }
+
+        @Test
+        fun `week with unknown operating room returns 404 OR_NOT_FOUND`() {
+            mockMvc
+                .get("/api/v1/schedule/week?operatingRoomId=${UUID.randomUUID()}&from=2099-06-01") {
+                    cookie(cookie(staffCookie))
+                }.andExpect {
+                    status { isNotFound() }
+                    jsonPath("$.code") { value("OR_NOT_FOUND") }
+                }
+        }
+
+        @Test
+        fun `week works for MAINTENANCE rooms (user explicitly picked the OR)`() {
+            mockMvc
+                .get("/api/v1/schedule/week?operatingRoomId=$maintenanceOrId&from=2099-06-01") {
+                    cookie(cookie(staffCookie))
+                }.andExpect {
+                    status { isOk() }
+                    jsonPath("$.operatingRoom.status") { value("MAINTENANCE") }
+                    jsonPath("$.days.length()") { value(7) }
+                }
+        }
+
+        @Test
+        fun `week unauthenticated returns 401`() {
+            val orId = UUID.randomUUID()
+            mockMvc
+                .get("/api/v1/schedule/week?operatingRoomId=$orId&from=2099-06-01")
+                .andExpect { status { isUnauthorized() } }
+        }
     }

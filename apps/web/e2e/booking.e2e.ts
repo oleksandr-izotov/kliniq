@@ -179,4 +179,25 @@ test('manager can create a booking, hit a conflict, and edit the time', async ({
 	// contains the word "cancelled" and would trip strict-mode otherwise.
 	await expect(panel.getByText('cancelled', { exact: true })).toBeVisible();
 	await expect(panel.getByText(/no actions left/)).toBeVisible();
+
+	// ---- week view: same booking shows up under today's column ------------
+	// Toggle to Week from the header — the side panel can stay open; the
+	// view-toggle button isn't behind it.
+	await page.getByRole('button', { name: /^Week$/ }).click();
+	// First day in the default week-of grid is today (test starts with
+	// weekFrom=today). The cancelled 11:00–12:00 block should appear in
+	// today's column — find that column by data-testid prefix and assert
+	// the block is inside it.
+	const todayCol = page.locator('[data-testid^="week-col-"]').first();
+	await expect(todayCol).toBeVisible();
+	await expect(todayCol.locator('button', { hasText: '11:00–12:00' })).toBeVisible({
+		timeout: 5_000
+	});
+
+	// Prev-week navigation removes today's column out of view; the booking
+	// shouldn't appear in the previous week.
+	await page.getByRole('button', { name: /^← Prev$/ }).click();
+	await expect(
+		page.locator('[data-testid^="week-col-"]').first().locator('button', { hasText: '11:00–12:00' })
+	).toHaveCount(0);
 });
