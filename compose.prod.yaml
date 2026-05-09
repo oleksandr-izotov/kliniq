@@ -1,20 +1,28 @@
-# Local prod-image testing. Mirrors the shape of the Hetzner deploy
-# (api + web + postgres + redis + caddy) so the dev can confirm the
-# whole production-shaped stack works before the first remote deploy.
+# Production stack — used both for local prod-image testing and for the
+# real Hetzner deploy through Coolify.
 #
-# Bring up:    docker compose -f compose.prod.yaml up --build
-# Tear down:   docker compose -f compose.prod.yaml down
-# Reset data:  docker compose -f compose.prod.yaml down -v
+# Required env vars (Coolify sets them; locally export or use a `.env`):
+#   PRIMARY_DOMAIN     `:80` for local plain-HTTP, `kliniq.izotov.dev`
+#                      in prod (Caddy auto-provisions Let's Encrypt).
+#   POSTGRES_PASSWORD  Generated random in Coolify; for local testing a
+#                      sane fallback is applied.
+#
+# Bring up locally:
+#   PRIMARY_DOMAIN=:80 docker compose -f compose.prod.yaml up --build
+# Tear down:
+#   docker compose -f compose.prod.yaml down
+# Reset data (drops Postgres + Redis volumes + Caddy certs):
+#   docker compose -f compose.prod.yaml down -v
 #
 # Sequence:
 #   1. ./gradlew -p apps/api :bootJar  (builds the JAR locally — Docker
 #                                       skips this because jOOQ codegen
 #                                       needs a real Postgres at build time)
 #   2. docker compose -f compose.prod.yaml up --build
-#   3. http://localhost — SPA at root, /api/* routed to the API
+#   3. Open the site on whatever PRIMARY_DOMAIN was set to.
 #
-# Coolify in real prod replaces caddy + replaces the Mailpit service
-# with Resend SMTP env vars; everything else is identical.
+# Mailpit is the SMTP sink for V1 — Resend hookup is a follow-up. Mail
+# accumulates in the container until the future SPRING_MAIL_HOST swap.
 
 name: kliniq-prod
 
@@ -82,8 +90,8 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_MAIL_HOST: mailpit
       SPRING_MAIL_PORT: 1025
-      APP_WEB_BASE_URL: http://localhost
-      APP_MAIL_FROM: no-reply@kliniq.local
+      APP_WEB_BASE_URL: ${APP_WEB_BASE_URL:-http://localhost}
+      APP_MAIL_FROM: ${APP_MAIL_FROM:-no-reply@kliniq.local}
     networks:
       - kliniq-prod-net
 
@@ -100,24 +108,38 @@ services:
     networks:
       - kliniq-prod-net
 
-  # Caddy plays the role Coolify's built-in Caddy plays in real prod:
-  # one HTTP port, /api/* → api container, everything else → web.
-  # No HTTPS here; in prod Coolify auto-provisions a Let's Encrypt cert.
+  # Caddy is the public entry point for both local and prod. The site
+  # address inside the Caddyfile is `{$PRIMARY_DOMAIN}`, so:
+  #   - `PRIMARY_DOMAIN=:80` → plain HTTP (local prod-image testing)
+  #   - `PRIMARY_DOMAIN=kliniq.izotov.dev` → Caddy auto-provisions a
+  #     Let's Encrypt cert and forces HTTPS. Issued certs persist in the
+  #     `caddy-data` volume across container restarts so we don't burn
+  #     through the LE rate limit on every deploy.
+  # In real prod the Coolify built-in proxy is disabled for this server
+  # so 80/443 are free for Caddy to bind.
   caddy:
     image: caddy:2-alpine
     ports:
       - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      PRIMARY_DOMAIN: ${PRIMARY_DOMAIN:-:80}
     depends_on:
       - api
       - web
     volumes:
       - ./compose.prod.Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
     networks:
       - kliniq-prod-net
 
 volumes:
   pg-data:
   redis-data:
+  caddy-data:
+  caddy-config:
 
 networks:
   kliniq-prod-net:
