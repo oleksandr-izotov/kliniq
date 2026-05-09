@@ -4,12 +4,14 @@ import com.kliniq.domain.booking.Booking
 import com.kliniq.domain.booking.BookingStatus
 import com.kliniq.infra.audit.AuditEntry
 import com.kliniq.infra.audit.AuditWriter
+import com.kliniq.infra.realtime.BookingChangedEvent
 import com.kliniq.infra.realtime.BookingEvent
 import com.kliniq.infra.realtime.BookingEventKind
-import com.kliniq.infra.realtime.BookingEventPublisher
 import com.kliniq.persistence.booking.BookingRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 /**
@@ -32,10 +34,11 @@ import java.util.UUID
 class TransitionBookingUseCase(
     private val bookings: BookingRepository,
     private val auditWriter: AuditWriter,
-    private val eventPublisher: BookingEventPublisher,
+    private val applicationEventPublisher: ApplicationEventPublisher,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    @Transactional
     @Suppress("ReturnCount")
     fun transition(
         actorUserId: UUID,
@@ -79,19 +82,22 @@ class TransitionBookingUseCase(
             ),
         )
         log.info("{}: id={} from={} to={}", action, id, current.status, target)
-        eventPublisher.publish(
-            BookingEvent(
-                kind =
-                    when (target) {
-                        BookingStatus.IN_PROGRESS -> BookingEventKind.STARTED
-                        BookingStatus.COMPLETED -> BookingEventKind.COMPLETED
-                        BookingStatus.CANCELLED -> BookingEventKind.CANCELLED
-                        BookingStatus.SCHEDULED ->
-                            error("SCHEDULED is the initial state; cannot be transitioned to")
-                    },
-                bookingId = updated.id,
-                operatingRoomId = updated.operatingRoomId,
-                occurredAt = updated.updatedAt,
+        // AFTER_COMMIT-bound publish: rolled-back transitions emit nothing.
+        applicationEventPublisher.publishEvent(
+            BookingChangedEvent(
+                BookingEvent(
+                    kind =
+                        when (target) {
+                            BookingStatus.IN_PROGRESS -> BookingEventKind.STARTED
+                            BookingStatus.COMPLETED -> BookingEventKind.COMPLETED
+                            BookingStatus.CANCELLED -> BookingEventKind.CANCELLED
+                            BookingStatus.SCHEDULED ->
+                                error("SCHEDULED is the initial state; cannot be transitioned to")
+                        },
+                    bookingId = updated.id,
+                    operatingRoomId = updated.operatingRoomId,
+                    occurredAt = updated.updatedAt,
+                ),
             ),
         )
         return Result.Success(updated)

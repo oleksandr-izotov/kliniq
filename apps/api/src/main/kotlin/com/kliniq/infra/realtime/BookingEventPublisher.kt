@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Component
+import org.springframework.transaction.event.TransactionPhase
+import org.springframework.transaction.event.TransactionalEventListener
 
 /**
  * Single producer for booking change events. Publishes JSON to Redis
@@ -11,12 +13,12 @@ import org.springframework.stereotype.Component
  * subscriber that fans out to its locally connected SSE emitters, so
  * a horizontal-scale deploy still gets one logical broadcast.
  *
- * Use cases call [publish] directly after their audit row is written.
- * Until the booking use cases gain a single `@Transactional` boundary,
- * we don't gain anything by re-routing through `@TransactionalEventListener` ;
- * the audit row itself doubles as our "did the write actually happen?"
- * signal because both the booking insert and the audit insert auto-commit
- * on success.
+ * Use cases never call [publish] directly. They publish a
+ * [BookingChangedEvent] through Spring's `ApplicationEventPublisher`
+ * inside their `@Transactional` boundary; [onBookingChanged] catches
+ * it on the `AFTER_COMMIT` phase and only then calls Redis. Rolled-back
+ * transactions emit nothing — the Sprint 3 retro's "no event before
+ * commit" sanity item turned into a structural guarantee.
  */
 @Component
 class BookingEventPublisher(
@@ -24,6 +26,11 @@ class BookingEventPublisher(
     private val mapper: ObjectMapper,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    fun onBookingChanged(envelope: BookingChangedEvent) {
+        publish(envelope.event)
+    }
 
     @Suppress("TooGenericExceptionCaught") // see comment in catch block
     fun publish(event: BookingEvent) {

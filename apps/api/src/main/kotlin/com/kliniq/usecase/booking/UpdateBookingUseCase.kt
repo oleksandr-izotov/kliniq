@@ -7,16 +7,18 @@ import com.kliniq.domain.booking.BookingTimeRange
 import com.kliniq.domain.or.OperatingRoomStatus
 import com.kliniq.infra.audit.AuditEntry
 import com.kliniq.infra.audit.AuditWriter
+import com.kliniq.infra.realtime.BookingChangedEvent
 import com.kliniq.infra.realtime.BookingEvent
 import com.kliniq.infra.realtime.BookingEventKind
-import com.kliniq.infra.realtime.BookingEventPublisher
 import com.kliniq.persistence.booking.BookingRepository
 import com.kliniq.persistence.clinic.ClinicSettingsRepository
 import com.kliniq.persistence.or.OperatingRoomRepository
 import com.kliniq.persistence.user.UserRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 /**
@@ -39,10 +41,11 @@ class UpdateBookingUseCase(
     private val users: UserRepository,
     private val clinicSettings: ClinicSettingsRepository,
     private val auditWriter: AuditWriter,
-    private val eventPublisher: BookingEventPublisher,
+    private val applicationEventPublisher: ApplicationEventPublisher,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    @Transactional
     @Suppress("ReturnCount", "LongMethod", "CyclomaticComplexMethod") // ceremony of validation guards
     fun update(
         actorUserId: UUID,
@@ -138,12 +141,15 @@ class UpdateBookingUseCase(
             ),
         )
         log.info("booking.updated: id={} by={}", id, actorUserId)
-        eventPublisher.publish(
-            BookingEvent(
-                kind = BookingEventKind.UPDATED,
-                bookingId = after.id,
-                operatingRoomId = after.operatingRoomId,
-                occurredAt = after.updatedAt,
+        // AFTER_COMMIT-bound publish: rolled-back transactions emit nothing.
+        applicationEventPublisher.publishEvent(
+            BookingChangedEvent(
+                BookingEvent(
+                    kind = BookingEventKind.UPDATED,
+                    bookingId = after.id,
+                    operatingRoomId = after.operatingRoomId,
+                    occurredAt = after.updatedAt,
+                ),
             ),
         )
         return Result.Success(after)

@@ -7,16 +7,18 @@ import com.kliniq.domain.booking.NewBooking
 import com.kliniq.domain.or.OperatingRoomStatus
 import com.kliniq.infra.audit.AuditEntry
 import com.kliniq.infra.audit.AuditWriter
+import com.kliniq.infra.realtime.BookingChangedEvent
 import com.kliniq.infra.realtime.BookingEvent
 import com.kliniq.infra.realtime.BookingEventKind
-import com.kliniq.infra.realtime.BookingEventPublisher
 import com.kliniq.persistence.booking.BookingRepository
 import com.kliniq.persistence.clinic.ClinicSettingsRepository
 import com.kliniq.persistence.or.OperatingRoomRepository
 import com.kliniq.persistence.user.UserRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -45,7 +47,7 @@ class CreateBookingUseCase(
     private val users: UserRepository,
     private val clinicSettings: ClinicSettingsRepository,
     private val auditWriter: AuditWriter,
-    private val eventPublisher: BookingEventPublisher,
+    private val applicationEventPublisher: ApplicationEventPublisher,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -60,6 +62,7 @@ class CreateBookingUseCase(
         val notes: String?,
     )
 
+    @Transactional
     @Suppress("ReturnCount", "LongMethod") // ceremony of validation guards
     fun create(cmd: Command): Result {
         // 1. Domain init runs invariants we duplicate from the DB CHECKs.
@@ -160,15 +163,19 @@ class CreateBookingUseCase(
             cmd.createdById,
         )
 
-        // 8. Real-time fan-out. Best-effort by design; the audit row above
-        // is the durable source of truth, the SSE event is just the
-        // courtesy push to connected browsers.
-        eventPublisher.publish(
-            BookingEvent(
-                kind = BookingEventKind.CREATED,
-                bookingId = saved.id,
-                operatingRoomId = saved.operatingRoomId,
-                occurredAt = saved.updatedAt,
+        // 8. Real-time fan-out. Publish through Spring's
+        // ApplicationEventPublisher so BookingEventPublisher's
+        // @TransactionalEventListener(AFTER_COMMIT) only forwards to
+        // Redis when this transaction commits — a rolled-back booking
+        // emits no SSE event.
+        applicationEventPublisher.publishEvent(
+            BookingChangedEvent(
+                BookingEvent(
+                    kind = BookingEventKind.CREATED,
+                    bookingId = saved.id,
+                    operatingRoomId = saved.operatingRoomId,
+                    occurredAt = saved.updatedAt,
+                ),
             ),
         )
         return Result.Success(saved)
