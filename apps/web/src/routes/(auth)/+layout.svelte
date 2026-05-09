@@ -1,16 +1,12 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { authApi } from '$lib/auth/api';
 	import ModeToggle from '$lib/components/ModeToggle.svelte';
 
 	let { children } = $props();
 
-	// Seed the XSRF cookie on first paint so the form's POST has a valid
-	// header. Failing silently is fine: the user's first POST without the
-	// header gets a 403 toast and they retry.
-	onMount(() => {
-		void authApi.primeCsrf();
-	});
+	// CSRF cookie seeding is handled lazily inside `apiRequest` — the first
+	// state-changing call fetches /api/v1/auth/me to pick up the cookie if
+	// it's missing. Doing it here on `onMount` would just add one console
+	// error from the 401 the anonymous probe earns, with no functional gain.
 </script>
 
 <!--
@@ -22,12 +18,30 @@
 <div class="grid bg-background lg:h-screen lg:grid-cols-2 lg:overflow-hidden">
 	<!-- Brand panel — desktop only -->
 	<aside class="relative hidden bg-muted lg:block">
-		<img
-			src="/illustrations/login-side.png"
-			alt=""
-			class="absolute inset-0 h-full w-full object-cover"
-			loading="eager"
-		/>
+		<!--
+			`<picture>` with `media="(min-width: 1024px)"` gates the network
+			fetch behind the same breakpoint that toggles `lg:block`. On
+			mobile the source doesn't match, browsers fall through to the
+			tiny inline-SVG `<img>` (≈100 bytes), and we save 1 MB on the
+			critical-path. The WebP source then knocks the desktop fetch
+			down 30× (1.06 MB → 35 KB) without touching visual fidelity.
+		-->
+		<picture>
+			<source
+				media="(min-width: 1024px)"
+				type="image/webp"
+				srcset="/illustrations/login-side.webp"
+			/>
+			<source media="(min-width: 1024px)" type="image/png" srcset="/illustrations/login-side.png" />
+			<img
+				src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%2F%3E"
+				alt=""
+				class="absolute inset-0 h-full w-full object-cover"
+				width="1200"
+				height="1200"
+				decoding="async"
+			/>
+		</picture>
 
 		<!-- Logo, top-left corner overlay -->
 		<header class="absolute top-8 left-8 flex items-center gap-2">
