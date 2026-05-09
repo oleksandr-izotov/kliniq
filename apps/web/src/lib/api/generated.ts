@@ -484,6 +484,22 @@ export interface paths {
 		readonly patch?: never;
 		readonly trace?: never;
 	};
+	readonly '/api/v1/admin/audit': {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly get: operations['list_5'];
+		readonly put?: never;
+		readonly post?: never;
+		readonly delete?: never;
+		readonly options?: never;
+		readonly head?: never;
+		readonly patch?: never;
+		readonly trace?: never;
+	};
 	readonly '/api/v1/admin/invitations/{id}': {
 		readonly parameters: {
 			readonly query?: never;
@@ -853,6 +869,44 @@ export interface components {
 			readonly acceptedAt?: string;
 			/** Format: date-time */
 			readonly revokedAt?: string;
+		};
+		readonly AuditEventListQuery: {
+			readonly entityType?: string;
+			/** Format: uuid */
+			readonly actorUserId?: string;
+			readonly action?: string;
+			/** Format: date-time */
+			readonly from?: string;
+			/** Format: date-time */
+			readonly to?: string;
+			/** Format: int32 */
+			readonly page: number;
+			/** Format: int32 */
+			readonly pageSize: number;
+		};
+		readonly AuditEventDto: {
+			/** Format: uuid */
+			readonly id: string;
+			/** Format: uuid */
+			readonly actorUserId?: string;
+			readonly action: string;
+			readonly entityType: string;
+			/** Format: uuid */
+			readonly entityId?: string;
+			readonly before?: string;
+			readonly after?: string;
+			readonly metadata?: string;
+			/** Format: date-time */
+			readonly createdAt: string;
+		};
+		readonly AuditEventPageDto: {
+			readonly items: readonly components['schemas']['AuditEventDto'][];
+			/** Format: int32 */
+			readonly page: number;
+			/** Format: int32 */
+			readonly pageSize: number;
+			/** Format: int32 */
+			readonly total: number;
 		};
 	};
 	responses: never;
@@ -1736,6 +1790,28 @@ export interface operations {
 				};
 				content: {
 					readonly '*/*': components['schemas']['AdminUserPageDto'];
+				};
+			};
+		};
+	};
+	readonly list_5: {
+		readonly parameters: {
+			readonly query: {
+				readonly query: components['schemas']['AuditEventListQuery'];
+			};
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly requestBody?: never;
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly '*/*': components['schemas']['AuditEventPageDto'];
 				};
 			};
 		};

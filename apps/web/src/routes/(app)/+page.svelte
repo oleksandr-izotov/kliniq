@@ -115,6 +115,20 @@
 						Configure →
 					</span>
 				</a>
+
+				<a
+					href="/admin/users"
+					class="group rounded-2xl border p-5 transition hover:border-primary/40"
+					data-testid="tile-admin"
+				>
+					<h2 class="text-lg font-semibold">Admin</h2>
+					<p class="mt-1 text-sm text-muted-foreground">
+						Manage users, send invitations, browse the audit log.
+					</p>
+					<span class="mt-3 inline-block text-sm font-medium text-primary group-hover:underline">
+						Open →
+					</span>
+				</a>
 			{/if}
 
 			<a
