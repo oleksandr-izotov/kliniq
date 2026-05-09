@@ -13,6 +13,7 @@ import com.kliniq.usecase.auth.RegisterUseCase
 import com.kliniq.usecase.auth.ResetPasswordUseCase
 import com.kliniq.usecase.auth.VerifyEmailUseCase
 import com.kliniq.usecase.invitation.AcceptInvitationUseCase
+import com.kliniq.usecase.invitation.LookupInvitationUseCase
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
@@ -38,6 +39,7 @@ class AuthController(
     private val resetPasswordUseCase: ResetPasswordUseCase,
     private val changePasswordUseCase: ChangePasswordUseCase,
     private val acceptInvitationUseCase: AcceptInvitationUseCase,
+    private val lookupInvitationUseCase: LookupInvitationUseCase,
     private val cookies: SessionCookieService,
     private val loginAttempts: LoginAttemptTracker,
     private val clock: java.time.Clock,
@@ -287,6 +289,51 @@ class AuthController(
                 ?: error("Authenticated request reached /me without KliniqAuthentication")
         return UserResponse.of(auth.user)
     }
+
+    /**
+     * Read-only preview of an invitation token. Returns the email + role
+     * the recipient is being invited to so the accept page can render
+     * "You've been invited as a MANAGER on x@y.local" before the form is
+     * filled in. Same status codes as accept (`410` for
+     * expired/revoked, `409` for already-accepted, `400` for unknown
+     * token) so the SPA can branch on the same set.
+     */
+    @PostMapping("/invitation/preview")
+    @Suppress("CyclomaticComplexMethod") // one branch per Result variant
+    fun previewInvitation(
+        @Valid @RequestBody request: InvitationPreviewRequest,
+    ): ResponseEntity<*> =
+        when (val result = lookupInvitationUseCase.lookup(request.token)) {
+            is LookupInvitationUseCase.Result.Pending ->
+                ResponseEntity.ok(
+                    InvitationPreviewDto(
+                        email = result.invitation.email,
+                        role = result.invitation.role,
+                        isSurgeon = result.invitation.isSurgeon,
+                        specialty = result.invitation.specialty,
+                        expiresAt = result.invitation.expiresAt,
+                    ),
+                )
+            LookupInvitationUseCase.Result.InvalidToken ->
+                ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                    ApiErrorResponse(code = "INVALID_TOKEN", message = "Invitation link is invalid."),
+                )
+            LookupInvitationUseCase.Result.Expired ->
+                ResponseEntity.status(HttpStatus.GONE).body(
+                    ApiErrorResponse(code = "INVITATION_EXPIRED", message = "Invitation has expired."),
+                )
+            LookupInvitationUseCase.Result.Revoked ->
+                ResponseEntity.status(HttpStatus.GONE).body(
+                    ApiErrorResponse(code = "INVITATION_REVOKED", message = "Invitation has been revoked."),
+                )
+            LookupInvitationUseCase.Result.AlreadyAccepted ->
+                ResponseEntity.status(HttpStatus.CONFLICT).body(
+                    ApiErrorResponse(
+                        code = "INVITATION_ALREADY_ACCEPTED",
+                        message = "This invitation has already been used.",
+                    ),
+                )
+        }
 
     /**
      * Public endpoint: redeem an admin-issued invitation token, create the

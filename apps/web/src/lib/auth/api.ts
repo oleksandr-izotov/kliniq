@@ -22,6 +22,21 @@ export type ApiUser = Schemas['UserResponse'];
 export type ApiMessage = Schemas['MessageResponse'];
 
 /**
+ * Hand-written wire shape for `POST /auth/invitation/preview`. The
+ * controller returns `ResponseEntity<*>` — same generic wildcard that
+ * keeps Sprint 2's BookingConflictDetail off the OpenAPI spec — so
+ * springdoc skips this DTO. Keep in sync with `InvitationPreviewDto`
+ * on the backend.
+ */
+export interface InvitationPreview {
+	email: string;
+	role: 'ADMIN' | 'MANAGER' | 'STAFF';
+	isSurgeon: boolean;
+	specialty?: 'CARDIOLOGY' | 'ORTHOPEDICS' | 'GENERAL' | 'NEUROSURGERY' | 'OPHTHALMOLOGY';
+	expiresAt: string;
+}
+
+/**
  * Error envelope returned by every endpoint that surfaces a friendly
  * code. springdoc renders `ResponseEntity<*>` as a generic shape, so this
  * one is hand-written — it matches `com.kliniq.api.error.ApiErrorResponse`
@@ -132,6 +147,16 @@ export const authApi = {
 
 	changePassword(input: Schemas['ChangePasswordRequest']) {
 		return apiRequest<ApiMessage>('POST', '/api/v1/auth/password/change', { body: input });
+	},
+
+	previewInvitation(token: string) {
+		return apiRequest<InvitationPreview>('POST', '/api/v1/auth/invitation/preview', {
+			body: { token }
+		});
+	},
+
+	acceptInvitation(input: Schemas['AcceptInvitationRequest']) {
+		return apiRequest<ApiUser>('POST', '/api/v1/auth/invitation/accept', { body: input });
 	},
 
 	/**

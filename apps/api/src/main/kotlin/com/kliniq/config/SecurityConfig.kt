@@ -58,6 +58,7 @@ class SecurityConfig {
                         "/api/v1/auth/password/forgot",
                         "/api/v1/auth/password/reset",
                         // Public — token-bearer is the auth.
+                        "/api/v1/auth/invitation/preview",
                         "/api/v1/auth/invitation/accept",
                         // Passkey authentication ceremony is public by design —
                         // the assertion *is* the proof. Registration/listing/

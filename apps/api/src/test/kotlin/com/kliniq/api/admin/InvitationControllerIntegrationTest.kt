@@ -409,4 +409,84 @@ class InvitationControllerIntegrationTest
                     jsonPath("$.code") { value("INVALID_TOKEN") }
                 }
         }
+
+        @Test
+        fun `preview returns email + role for a pending invitation`() {
+            val adminCookie = loginAs("admin@kliniq.local", Role.ADMIN)
+            mockMvc
+                .post("/api/v1/admin/invitations") {
+                    with(csrf())
+                    cookie(cookie(adminCookie))
+                    contentType = MediaType.APPLICATION_JSON
+                    content =
+                        mapper.writeValueAsString(
+                            mapOf(
+                                "email" to "preview@kliniq.local",
+                                "role" to "MANAGER",
+                                "isSurgeon" to true,
+                                "specialty" to "ORTHOPEDICS",
+                            ),
+                        )
+                }.andExpect { status { isCreated() } }
+            val token = captureInvitationToken()
+
+            mockMvc
+                .post("/api/v1/auth/invitation/preview") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = mapper.writeValueAsString(mapOf("token" to token))
+                }.andExpect {
+                    status { isOk() }
+                    jsonPath("$.email") { value("preview@kliniq.local") }
+                    jsonPath("$.role") { value("MANAGER") }
+                    jsonPath("$.isSurgeon") { value(true) }
+                    jsonPath("$.specialty") { value("ORTHOPEDICS") }
+                    jsonPath("$.expiresAt") { exists() }
+                }
+        }
+
+        @Test
+        fun `preview surfaces the same terminal codes as accept`() {
+            val adminCookie = loginAs("admin@kliniq.local", Role.ADMIN)
+
+            // Bogus token → 400 INVALID_TOKEN
+            mockMvc
+                .post("/api/v1/auth/invitation/preview") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = mapper.writeValueAsString(mapOf("token" to "garbage"))
+                }.andExpect {
+                    status { isBadRequest() }
+                    jsonPath("$.code") { value("INVALID_TOKEN") }
+                }
+
+            // Issue, then revoke → preview returns 410 INVITATION_REVOKED
+            val createResp =
+                mockMvc
+                    .post("/api/v1/admin/invitations") {
+                        with(csrf())
+                        cookie(cookie(adminCookie))
+                        contentType = MediaType.APPLICATION_JSON
+                        content =
+                            mapper.writeValueAsString(mapOf("email" to "rv@kliniq.local", "role" to "STAFF"))
+                    }.andExpect { status { isCreated() } }
+                    .andReturn()
+            val inviteId = mapper.readTree(createResp.response.contentAsString)["id"].asText()
+            val token = captureInvitationToken()
+            mockMvc
+                .delete("/api/v1/admin/invitations/$inviteId") {
+                    with(csrf())
+                    cookie(cookie(adminCookie))
+                }.andExpect { status { isNoContent() } }
+
+            mockMvc
+                .post("/api/v1/auth/invitation/preview") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = mapper.writeValueAsString(mapOf("token" to token))
+                }.andExpect {
+                    status { isGone() }
+                    jsonPath("$.code") { value("INVITATION_REVOKED") }
+                }
+        }
     }

@@ -36,8 +36,16 @@ PASSWORD = "correct-horse-battery-staple"
 NEW_PASSWORD = "totally-new-passphrase-9876"
 DISPLAY = "Smoke Tester"
 
-# Booking-flow uses a separate user so it doesn't tangle with the
-# password-reset assertions on the auth user above.
+# Booking-flow uses two separate users so it doesn't tangle with the
+# password-reset assertions on the auth user above:
+#   - ADMIN_EMAIL is bootstrapped to ADMIN role via a single psql line
+#     (the only chicken-and-egg in the system — a fresh deploy has
+#     no way to mint the first admin without it). Issues the invitation.
+#   - BOOKING_EMAIL is the invitee who becomes a MANAGER+surgeon by
+#     accepting the invitation through real HTTP endpoints. No more
+#     psycopg side-channel for role promotion.
+ADMIN_EMAIL = f"smoke-admin-{int(time.time())}@kliniq.test"
+ADMIN_DISPLAY = "Smoke Admin"
 BOOKING_EMAIL = f"smoke-book-{int(time.time())}@kliniq.test"
 BOOKING_DISPLAY = "Booking Smoke"
 DEV_PG_URL = "postgres://kliniq:kliniq_dev_only@localhost:55432/kliniq"
@@ -111,11 +119,11 @@ def fetch_token_from_mail(subject_substr: str, link_regex: str) -> str:
     return ""  # unreachable
 
 
-def promote_to_manager_surgeon(email: str) -> None:
-    """Flip the seeded user's role to MANAGER and flag them as a GENERAL surgeon
-    so they can both POST /operating-rooms and show up in the booking
-    modal's surgeon picker. There is no public endpoint for either bit;
-    role/specialty changes are an admin concern outside Sprint 2's scope."""
+def bootstrap_admin(email: str) -> None:
+    """The chicken-and-egg admin: a fresh deploy has no admin to issue
+    the first invitation, so we promote a freshly-registered user via
+    one psql UPDATE. This is the only role change the smoke does
+    side-channel; everything below it goes through real HTTP."""
     try:
         import psycopg
     except ImportError:
@@ -125,8 +133,7 @@ def promote_to_manager_surgeon(email: str) -> None:
         )
     with psycopg.connect(DEV_PG_URL, autocommit=True) as conn:  # type: ignore[attr-defined]
         conn.execute(
-            "UPDATE users SET role = 'MANAGER', is_surgeon = TRUE, specialty = 'GENERAL' "
-            "WHERE email_normalized = %s",
+            "UPDATE users SET role = 'ADMIN' WHERE email_normalized = %s",
             (email.lower(),),
         )
 
@@ -141,29 +148,64 @@ def cleanup_booking_fixtures() -> None:
     with psycopg.connect(DEV_PG_URL, autocommit=True) as conn:  # type: ignore[attr-defined]
         conn.execute("DELETE FROM bookings WHERE patient_ref LIKE 'P-9999-%'")
         conn.execute("DELETE FROM operating_rooms WHERE code LIKE 'SMOKE-%'")
-        conn.execute("DELETE FROM users WHERE email_normalized LIKE 'smoke-book-%'")
+        conn.execute(
+            "DELETE FROM user_invitations WHERE email_normalized LIKE 'smoke-%@kliniq.test'"
+        )
+        conn.execute(
+            "DELETE FROM users WHERE email_normalized "
+            "LIKE 'smoke-book-%' OR email_normalized LIKE 'smoke-admin-%'"
+        )
 
 
 def run_booking_flow() -> None:
-    section("BOOKING FLOW: register MANAGER+surgeon")
+    section("BOOKING FLOW: bootstrap admin")
     cleanup_booking_fixtures()
 
+    # ---- 1. Register + verify the chicken-and-egg admin ------------------
+    admin = make_session()
+    admin.get(f"{BACKEND}/api/v1/auth/me", verify=False)
+    api_post(admin, "/api/v1/auth/register", {
+        "email": ADMIN_EMAIL, "password": PASSWORD, "displayName": ADMIN_DISPLAY,
+    })
+    verify_token = fetch_token_from_mail("verify", r"verify\?token=([A-Za-z0-9_-]+)")
+    api_post(admin, "/api/v1/auth/verify", {"token": verify_token})
+    bootstrap_admin(ADMIN_EMAIL)
+    api_post(admin, "/api/v1/auth/login", {"email": ADMIN_EMAIL, "password": PASSWORD})
+    ok(f"admin {ADMIN_EMAIL[:24]}... bootstrapped")
+
+    # ---- 2. Admin invites the booking user as MANAGER+surgeon -----------
+    section("invite booking user via /admin/invitations")
+    r = api_post(admin, "/api/v1/admin/invitations", {
+        "email": BOOKING_EMAIL,
+        "role": "MANAGER",
+        "isSurgeon": True,
+        "specialty": "GENERAL",
+    }, expect=201)
+    ok(f"invitation issued for {BOOKING_EMAIL[:24]}... role=MANAGER surgeon=GENERAL")
+
+    # ---- 3. Recipient accepts the invitation through the public endpoint -
+    section("accept invitation via /auth/invitation/accept")
+    invite_token = fetch_token_from_mail("invited", r"invite\?token=([A-Za-z0-9_-]+)")
     s = make_session()
     s.get(f"{BACKEND}/api/v1/auth/me", verify=False)
-    api_post(s, "/api/v1/auth/register", {
-        "email": BOOKING_EMAIL, "password": PASSWORD, "displayName": BOOKING_DISPLAY,
+
+    # Preview surfaces the role + email we'll get on accept — exercise it
+    # so the SPA's accept-page contract has smoke coverage.
+    r = api_post(s, "/api/v1/auth/invitation/preview", {"token": invite_token})
+    if r.json()["role"] != "MANAGER" or r.json()["email"] != BOOKING_EMAIL:
+        fail("preview returned unexpected shape", r.text[:300])
+    ok("preview returns MANAGER + correct email")
+
+    api_post(s, "/api/v1/auth/invitation/accept", {
+        "token": invite_token,
+        "password": PASSWORD,
+        "displayName": BOOKING_DISPLAY,
     })
-    ok(f"registered {BOOKING_EMAIL}")
-
-    verify_token = fetch_token_from_mail("verify", r"verify\?token=([A-Za-z0-9_-]+)")
-    api_post(s, "/api/v1/auth/verify", {"token": verify_token})
-    ok("verified")
-
-    promote_to_manager_surgeon(BOOKING_EMAIL)
-    ok("promoted to MANAGER + GENERAL surgeon (via dev Postgres)")
-
-    api_post(s, "/api/v1/auth/login", {"email": BOOKING_EMAIL, "password": PASSWORD})
-    ok("logged in")
+    # Session cookie is set by the accept response — same primitive login uses.
+    me = api_get(s, "/api/v1/auth/me")
+    if me.json()["role"] != "MANAGER" or not me.json()["isSurgeon"]:
+        fail("accept landed wrong role/flag", me.text[:300])
+    ok(f"accepted as MANAGER + GENERAL surgeon, /me reflects it")
 
     section("create operating room")
     or_code = f"SMOKE-{int(time.time()) % 100000}"

@@ -110,6 +110,9 @@ class RateLimitFilter(
                 // Public accept: token brute-force barrier on top of
                 // sha-256 search-space.
                 "POST:/api/v1/auth/invitation/accept" to Rule(10, Duration.ofMinutes(1)),
+                // Preview is read-only but still token-guessable; cap
+                // generously so the SPA's on-mount probe always works.
+                "POST:/api/v1/auth/invitation/preview" to Rule(20, Duration.ofMinutes(1)),
             )
     }
 }

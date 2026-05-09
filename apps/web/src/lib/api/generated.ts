@@ -260,6 +260,22 @@ export interface paths {
 		readonly patch?: never;
 		readonly trace?: never;
 	};
+	readonly '/api/v1/auth/invitation/preview': {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly get?: never;
+		readonly put?: never;
+		readonly post: operations['previewInvitation'];
+		readonly delete?: never;
+		readonly options?: never;
+		readonly head?: never;
+		readonly patch?: never;
+		readonly trace?: never;
+	};
 	readonly '/api/v1/auth/invitation/accept': {
 		readonly parameters: {
 			readonly query?: never;
@@ -595,6 +611,9 @@ export interface components {
 		readonly LoginRequest: {
 			readonly email: string;
 			readonly password: string;
+		};
+		readonly InvitationPreviewRequest: {
+			readonly token: string;
 		};
 		readonly AcceptInvitationRequest: {
 			readonly token: string;
@@ -1252,6 +1271,30 @@ export interface operations {
 		readonly requestBody: {
 			readonly content: {
 				readonly 'application/json': components['schemas']['LoginRequest'];
+			};
+		};
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly '*/*': Record<string, never>;
+				};
+			};
+		};
+	};
+	readonly previewInvitation: {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly requestBody: {
+			readonly content: {
+				readonly 'application/json': components['schemas']['InvitationPreviewRequest'];
 			};
 		};
 		readonly responses: {

@@ -121,3 +121,17 @@ data class AcceptInvitationRequest(
     @field:jakarta.validation.constraints.Size(min = 1, max = 100)
     val displayName: String,
 )
+
+/** Read-only preview the SPA loads on the /invite page before the form is filled in. */
+data class InvitationPreviewRequest(
+    @field:jakarta.validation.constraints.NotBlank
+    val token: String,
+)
+
+data class InvitationPreviewDto(
+    val email: String,
+    val role: Role,
+    val isSurgeon: Boolean,
+    val specialty: Specialty?,
+    val expiresAt: OffsetDateTime,
+)
