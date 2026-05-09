@@ -1,0 +1,123 @@
+# Local prod-image testing. Mirrors the shape of the Hetzner deploy
+# (api + web + postgres + redis + caddy) so the dev can confirm the
+# whole production-shaped stack works before the first remote deploy.
+#
+# Bring up:    docker compose -f compose.prod.yaml up --build
+# Tear down:   docker compose -f compose.prod.yaml down
+# Reset data:  docker compose -f compose.prod.yaml down -v
+#
+# Sequence:
+#   1. ./gradlew -p apps/api :bootJar  (builds the JAR locally — Docker
+#                                       skips this because jOOQ codegen
+#                                       needs a real Postgres at build time)
+#   2. docker compose -f compose.prod.yaml up --build
+#   3. http://localhost — SPA at root, /api/* routed to the API
+#
+# Coolify in real prod replaces caddy + replaces the Mailpit service
+# with Resend SMTP env vars; everything else is identical.
+
+name: kliniq-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: kliniq
+      POSTGRES_USER: kliniq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kliniq_local_prod_test}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kliniq -d kliniq"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - kliniq-prod-net
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - kliniq-prod-net
+
+  # Mailpit only for local prod-test — in real prod the API points at
+  # Resend SMTP via env vars (SPRING_MAIL_HOST etc.). UI port not
+  # mapped to host because dev compose typically already binds 8025
+  # there. To inspect mail temporarily, add `- "8026:8025"` here.
+  mailpit:
+    image: axllent/mailpit:latest
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    networks:
+      - kliniq-prod-net
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/kliniq
+      SPRING_DATASOURCE_USERNAME: kliniq
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-kliniq_local_prod_test}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_MAIL_HOST: mailpit
+      SPRING_MAIL_PORT: 1025
+      APP_WEB_BASE_URL: http://localhost
+      APP_MAIL_FROM: no-reply@kliniq.local
+    networks:
+      - kliniq-prod-net
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    networks:
+      - kliniq-prod-net
+
+  # Caddy plays the role Coolify's built-in Caddy plays in real prod:
+  # one HTTP port, /api/* → api container, everything else → web.
+  # No HTTPS here; in prod Coolify auto-provisions a Let's Encrypt cert.
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+      - web
+    volumes:
+      - ./compose.prod.Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      - kliniq-prod-net
+
+volumes:
+  pg-data:
+  redis-data:
+
+networks:
+  kliniq-prod-net:

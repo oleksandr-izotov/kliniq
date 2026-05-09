@@ -1,0 +1,31 @@
+# The API Dockerfile only needs build/libs/*.jar. Excluding everything
+# else trims the build context to ~30MB and avoids leaking dev creds
+# from local config files into the image.
+
+# Source — the JAR was built outside the container, source isn't needed.
+src
+build
+!build/libs
+
+# Gradle scratch
+.gradle
+gradle
+gradlew
+gradlew.bat
+build.gradle.kts
+settings.gradle.kts
+
+# Editor + IDE
+.vscode
+.idea
+*.swp
+
+# Logs
+*.log
+
+# Local certs (never ship to prod images)
+certs
+
+# Git
+.git
+.gitignore

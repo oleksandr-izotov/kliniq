@@ -1,0 +1,29 @@
+# Cuts the build context for `docker build`. Anything not needed by the
+# multi-stage build belongs here — keeps the layer cache stable and
+# avoids accidentally shipping local secrets / scratch files.
+
+# Node + pnpm scratch
+node_modules
+.svelte-kit
+build
+.vite
+
+# Test artefacts
+test-results
+playwright-report
+e2e
+
+# Editor + IDE
+.vscode
+.idea
+*.swp
+
+# Logs + env
+*.log
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore

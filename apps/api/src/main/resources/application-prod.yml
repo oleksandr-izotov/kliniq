@@ -1,0 +1,51 @@
+# Prod profile. Every secret reads from env vars (Spring Boot's relaxed
+# binding maps SPRING_DATASOURCE_URL → spring.datasource.url etc., so we
+# don't need to enumerate every one here — only the things that differ
+# from application-local.yml live in this file).
+#
+# TLS terminates at Coolify's Caddy proxy in real prod; the JVM
+# listens on plain HTTP on a non-privileged port. Day 41 adds the
+# JSON logback config that takes over when this profile is active.
+
+server:
+  port: 8080
+  forward-headers-strategy: native
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 5000
+      leak-detection-threshold: 30000
+  data:
+    redis:
+      timeout: 3000ms
+  session:
+    store-type: redis
+    timeout: 30d
+    redis:
+      namespace: "kliniq:session"
+  jackson:
+    default-property-inclusion: non_null
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    org.springframework.web: WARN
+    org.flywaydb: INFO

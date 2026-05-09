@@ -1,0 +1,18 @@
+# Caddy config for the local prod-image stack. In real prod, Coolify
+# provisions an equivalent route (with TLS auto-cert) automatically;
+# this file just makes the local docker-compose stack feel the same.
+
+:80 {
+	# API endpoints — backend handles them all under /api/v1, plus
+	# springdoc paths, plus Spring Actuator for healthchecks.
+	@api {
+		path /api/* /v3/api-docs* /swagger-ui* /actuator/*
+	}
+	reverse_proxy @api api:8080
+
+	# Everything else — SPA + SvelteKit-rendered routes.
+	reverse_proxy web:3000
+
+	# Compress responses where it helps.
+	encode gzip zstd
+}

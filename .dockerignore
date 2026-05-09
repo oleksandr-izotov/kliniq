@@ -1,0 +1,50 @@
+# Root-level .dockerignore. The web service in compose.prod.yaml uses
+# the repo root as build context (so the Dockerfile can `COPY pnpm-lock.yaml`
+# from /), so this is the file Docker consults for that build.
+#
+# The api service uses apps/api/ as its context and reads
+# apps/api/.dockerignore separately.
+
+# Anything outside the web build's needs.
+apps/api
+infra
+packages
+docs
+scripts
+certs
+brand-assets
+.github
+
+# Node + pnpm scratch — never ship the host's node_modules into the
+# build, the container creates its own.
+**/node_modules
+**/.svelte-kit
+**/build
+**/.vite
+**/.vite-temp
+.pnpm-store
+
+# Test artefacts
+**/test-results
+**/playwright-report
+**/e2e
+
+# Editor
+**/.vscode
+**/.idea
+**/*.swp
+**/*.iml
+
+# Logs + env
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+
+# Git
+.git
+.gitignore
+
+# Top-level docs
+README.md
+LICENSE

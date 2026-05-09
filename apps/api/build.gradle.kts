@@ -126,6 +126,14 @@ tasks.withType<Test> {
     finalizedBy(tasks.named<JacocoReport>("jacocoTestReport"))
 }
 
+// We ship only the bootable fat JAR. Disabling the plain library JAR
+// keeps build/libs/ to a single artifact, which means apps/api/Dockerfile
+// can reference build/libs/*.jar without hitting the COPY-multiple-files
+// error (Docker treats *.jar as multiple sources unless dest ends in /).
+tasks.named<Jar>("jar") {
+    enabled = false
+}
+
 // JaCoCo: aggregate coverage across the integration tests so we can
 // answer DoD claims like "auth packages > 70% coverage" with a real
 // number, not a vibe. Reports land in build/reports/jacoco/test/.
