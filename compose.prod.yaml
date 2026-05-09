@@ -167,13 +167,18 @@ volumes:
   caddy-data:
   caddy-config:
 
-# Inline Caddyfile. Caddy's `{$PRIMARY_DOMAIN}` placeholder is read at
-# runtime — Compose's own variable interpolation only touches `${VAR}`
-# (with the dollar before the brace), so this passes through verbatim.
+# Inline Caddyfile. Caddy's `{$PRIMARY_DOMAIN}` placeholder must reach
+# Caddy verbatim so it can resolve the env var at parse time. Docker
+# Compose interpolation greedily matches `$VAR` (no braces) — so a raw
+# `{$PRIMARY_DOMAIN}` becomes `{<value>}` (Compose ate the `$NAME`,
+# kept the surrounding braces) and Caddy chokes with `subject does not
+# qualify for certificate: '{kliniq.izotov.dev}'`. Escaping the dollar
+# as `$$` makes Compose write a literal `$`, leaving Caddy to do its
+# own placeholder substitution.
 configs:
   caddyfile:
     content: |
-      {$PRIMARY_DOMAIN} {
+      {$$PRIMARY_DOMAIN} {
         # API endpoints — backend handles them all under /api/v1, plus
         # springdoc paths, plus Spring Actuator for healthchecks.
         @api {
