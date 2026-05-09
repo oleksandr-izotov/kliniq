@@ -132,6 +132,20 @@
 			{/if}
 
 			<a
+				href="/settings/profile"
+				class="group rounded-2xl border p-5 transition hover:border-primary/40"
+				data-testid="tile-profile"
+			>
+				<h2 class="text-lg font-semibold">Profile</h2>
+				<p class="mt-1 text-sm text-muted-foreground">
+					Update the display name shown on bookings and the schedule.
+				</p>
+				<span class="mt-3 inline-block text-sm font-medium text-primary group-hover:underline">
+					Open →
+				</span>
+			</a>
+
+			<a
 				href="/settings/security"
 				class="group rounded-2xl border p-5 transition hover:border-primary/40"
 				data-testid="tile-security"

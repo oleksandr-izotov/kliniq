@@ -372,6 +372,22 @@ export interface paths {
 		readonly patch: operations['rename'];
 		readonly trace?: never;
 	};
+	readonly '/api/v1/auth/me': {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly get: operations['me'];
+		readonly put?: never;
+		readonly post?: never;
+		readonly delete?: never;
+		readonly options?: never;
+		readonly head?: never;
+		readonly patch: operations['updateMe'];
+		readonly trace?: never;
+	};
 	readonly '/api/v1/admin/users/{id}': {
 		readonly parameters: {
 			readonly query?: never;
@@ -460,22 +476,6 @@ export interface paths {
 			readonly cookie?: never;
 		};
 		readonly get: operations['list_3'];
-		readonly put?: never;
-		readonly post?: never;
-		readonly delete?: never;
-		readonly options?: never;
-		readonly head?: never;
-		readonly patch?: never;
-		readonly trace?: never;
-	};
-	readonly '/api/v1/auth/me': {
-		readonly parameters: {
-			readonly query?: never;
-			readonly header?: never;
-			readonly path?: never;
-			readonly cookie?: never;
-		};
-		readonly get: operations['me'];
 		readonly put?: never;
 		readonly post?: never;
 		readonly delete?: never;
@@ -696,6 +696,31 @@ export interface components {
 		readonly RenamePasskeyRequest: {
 			readonly deviceName: string;
 		};
+		readonly UpdateProfileRequest: {
+			readonly displayName: string;
+		};
+		readonly UserResponse: {
+			/** Format: uuid */
+			readonly id: string;
+			readonly email: string;
+			readonly displayName: string;
+			/** @enum {string} */
+			readonly role: 'ADMIN' | 'MANAGER' | 'STAFF';
+			readonly isSurgeon: boolean;
+			/** @enum {string} */
+			readonly specialty?:
+				| 'CARDIOLOGY'
+				| 'ORTHOPEDICS'
+				| 'GENERAL'
+				| 'NEUROSURGERY'
+				| 'OPHTHALMOLOGY';
+			/** @enum {string} */
+			readonly status: 'ACTIVE' | 'DISABLED';
+			/** Format: date-time */
+			readonly emailVerifiedAt?: string;
+			/** Format: date-time */
+			readonly createdAt: string;
+		};
 		readonly UpdateUserAdminRequest: {
 			/** @enum {string} */
 			readonly role: 'ADMIN' | 'MANAGER' | 'STAFF';
@@ -795,28 +820,6 @@ export interface components {
 			readonly createdAt: string;
 			/** Format: date-time */
 			readonly lastUsedAt?: string;
-		};
-		readonly UserResponse: {
-			/** Format: uuid */
-			readonly id: string;
-			readonly email: string;
-			readonly displayName: string;
-			/** @enum {string} */
-			readonly role: 'ADMIN' | 'MANAGER' | 'STAFF';
-			readonly isSurgeon: boolean;
-			/** @enum {string} */
-			readonly specialty?:
-				| 'CARDIOLOGY'
-				| 'ORTHOPEDICS'
-				| 'GENERAL'
-				| 'NEUROSURGERY'
-				| 'OPHTHALMOLOGY';
-			/** @enum {string} */
-			readonly status: 'ACTIVE' | 'DISABLED';
-			/** Format: date-time */
-			readonly emailVerifiedAt?: string;
-			/** Format: date-time */
-			readonly createdAt: string;
 		};
 		readonly AdminUserListQuery: {
 			readonly q?: string;
@@ -1659,6 +1662,50 @@ export interface operations {
 			};
 		};
 	};
+	readonly me: {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly requestBody?: never;
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly '*/*': components['schemas']['UserResponse'];
+				};
+			};
+		};
+	};
+	readonly updateMe: {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly requestBody: {
+			readonly content: {
+				readonly 'application/json': components['schemas']['UpdateProfileRequest'];
+			};
+		};
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly '*/*': components['schemas']['UserResponse'];
+				};
+			};
+		};
+	};
 	readonly patch: {
 		readonly parameters: {
 			readonly query?: never;
@@ -1787,26 +1834,6 @@ export interface operations {
 				};
 				content: {
 					readonly '*/*': readonly components['schemas']['PasskeySummary'][];
-				};
-			};
-		};
-	};
-	readonly me: {
-		readonly parameters: {
-			readonly query?: never;
-			readonly header?: never;
-			readonly path?: never;
-			readonly cookie?: never;
-		};
-		readonly requestBody?: never;
-		readonly responses: {
-			/** @description OK */
-			readonly 200: {
-				headers: {
-					readonly [name: string]: unknown;
-				};
-				content: {
-					readonly '*/*': components['schemas']['UserResponse'];
 				};
 			};
 		};

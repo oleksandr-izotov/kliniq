@@ -75,6 +75,13 @@ data class ChangePasswordRequest(
     val newPassword: String,
 )
 
+/** PATCH /auth/me — V1 only carries displayName; future fields land here. */
+data class UpdateProfileRequest(
+    @field:NotBlank
+    @field:Size(min = 1, max = RegisterRequest.MAX_DISPLAY_NAME)
+    val displayName: String,
+)
+
 data class MessageResponse(
     val message: String,
 )

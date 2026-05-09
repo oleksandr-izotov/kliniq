@@ -33,6 +33,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.MvcResult
 import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.patch
 import org.springframework.test.web.servlet.post
 
 @SpringBootTest
@@ -880,6 +881,161 @@ class AuthControllerIntegrationTest
                 "user.email_verified",
                 "user.login",
             )
+        }
+
+        // ---- PATCH /me (self-service displayName) ------------------------
+
+        private fun profileBody(name: String) = objectMapper.writeValueAsString(mapOf("displayName" to name))
+
+        @Test
+        fun `PATCH me updates displayName, returns the new user, and writes an audit row`() {
+            registerAndVerify(email = "morgan@kliniq.local", displayName = "Old Name")
+            val cookie =
+                mockMvc
+                    .post("/api/v1/auth/login") {
+                        with(csrf())
+                        contentType = MediaType.APPLICATION_JSON
+                        content = loginBody("morgan@kliniq.local", DEFAULT_PASSWORD)
+                    }.andReturn()
+                    .sessionCookieValue()!!
+
+            mockMvc
+                .patch("/api/v1/auth/me") {
+                    with(csrf())
+                    cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, cookie))
+                    contentType = MediaType.APPLICATION_JSON
+                    content = profileBody("New Name")
+                }.andExpect {
+                    status { isOk() }
+                    jsonPath("$.displayName") { value("New Name") }
+                    jsonPath("$.email") { value("morgan@kliniq.local") }
+                }
+
+            // GET /me on the same session reflects the new name.
+            mockMvc
+                .get("/api/v1/auth/me") {
+                    cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, cookie))
+                }.andExpect {
+                    status { isOk() }
+                    jsonPath("$.displayName") { value("New Name") }
+                }
+
+            val userId =
+                dsl
+                    .select(USERS.ID)
+                    .from(USERS)
+                    .where(USERS.EMAIL_NORMALIZED.eq("morgan@kliniq.local"))
+                    .fetchOne(0, java.util.UUID::class.java)!!
+            val actions =
+                dsl
+                    .select(AUDIT_EVENTS.ACTION)
+                    .from(AUDIT_EVENTS)
+                    .where(AUDIT_EVENTS.ENTITY_ID.eq(userId))
+                    .fetch(AUDIT_EVENTS.ACTION)
+            assertThat(actions).contains("user.display_name_changed")
+        }
+
+        @Test
+        fun `PATCH me trims whitespace and treats an unchanged value as a no-op (no audit row)`() {
+            registerAndVerify(email = "nia@kliniq.local", displayName = "Same Name")
+            val cookie =
+                mockMvc
+                    .post("/api/v1/auth/login") {
+                        with(csrf())
+                        contentType = MediaType.APPLICATION_JSON
+                        content = loginBody("nia@kliniq.local", DEFAULT_PASSWORD)
+                    }.andReturn()
+                    .sessionCookieValue()!!
+
+            mockMvc
+                .patch("/api/v1/auth/me") {
+                    with(csrf())
+                    cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, cookie))
+                    contentType = MediaType.APPLICATION_JSON
+                    content = profileBody("  Same Name  ")
+                }.andExpect {
+                    status { isOk() }
+                    jsonPath("$.displayName") { value("Same Name") }
+                }
+
+            val userId =
+                dsl
+                    .select(USERS.ID)
+                    .from(USERS)
+                    .where(USERS.EMAIL_NORMALIZED.eq("nia@kliniq.local"))
+                    .fetchOne(0, java.util.UUID::class.java)!!
+            val displayNameAudits =
+                dsl
+                    .selectCount()
+                    .from(AUDIT_EVENTS)
+                    .where(AUDIT_EVENTS.ENTITY_ID.eq(userId))
+                    .and(AUDIT_EVENTS.ACTION.eq("user.display_name_changed"))
+                    .fetchOne(0, Int::class.java) ?: 0
+            assertThat(displayNameAudits)
+                .`as`("idempotent PATCH writes no display_name_changed audit row")
+                .isEqualTo(0)
+        }
+
+        @Test
+        fun `PATCH me without a session returns 401`() {
+            mockMvc
+                .patch("/api/v1/auth/me") {
+                    with(csrf())
+                    contentType = MediaType.APPLICATION_JSON
+                    content = profileBody("Anything")
+                }.andExpect { status { isUnauthorized() } }
+        }
+
+        @Test
+        fun `PATCH me with blank displayName returns 400 VALIDATION_ERROR`() {
+            registerAndVerify(email = "olga@kliniq.local")
+            val cookie =
+                mockMvc
+                    .post("/api/v1/auth/login") {
+                        with(csrf())
+                        contentType = MediaType.APPLICATION_JSON
+                        content = loginBody("olga@kliniq.local", DEFAULT_PASSWORD)
+                    }.andReturn()
+                    .sessionCookieValue()!!
+
+            mockMvc
+                .patch("/api/v1/auth/me") {
+                    with(csrf())
+                    cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, cookie))
+                    contentType = MediaType.APPLICATION_JSON
+                    content = profileBody("   ")
+                }.andExpect {
+                    status { isBadRequest() }
+                    jsonPath("$.code") { value("VALIDATION_ERROR") }
+                    jsonPath("$.fieldErrors[*].field") { value("displayName") }
+                }
+        }
+
+        @Test
+        fun `PATCH me with overlong displayName returns 400 VALIDATION_ERROR`() {
+            registerAndVerify(email = "petra@kliniq.local")
+            val cookie =
+                mockMvc
+                    .post("/api/v1/auth/login") {
+                        with(csrf())
+                        contentType = MediaType.APPLICATION_JSON
+                        content = loginBody("petra@kliniq.local", DEFAULT_PASSWORD)
+                    }.andReturn()
+                    .sessionCookieValue()!!
+
+            // 101 characters — one past the 100-char domain bound.
+            val tooLong = "x".repeat(101)
+            mockMvc
+                .patch("/api/v1/auth/me") {
+                    with(csrf())
+                    cookie(jakarta.servlet.http.Cookie(SessionCookieService.COOKIE_NAME, cookie))
+                    contentType = MediaType.APPLICATION_JSON
+                    content = profileBody(tooLong)
+                }.andExpect {
+                    status { isBadRequest() }
+                    jsonPath("$.code") { value("VALIDATION_ERROR") }
+                    jsonPath("$.fieldErrors[*].field") { value("displayName") }
+                }
         }
 
         companion object {

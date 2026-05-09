@@ -57,6 +57,19 @@ interface UserRepository {
     ): Boolean
 
     /**
+     * Self-service display-name change. Trusted callers ([UpdateProfileUseCase])
+     * pass values they've already validated for length and non-blankness;
+     * the surgeon-iff-specialty invariant on [User.init] is unaffected
+     * because this never touches role / surgeon flag / specialty / status.
+     * Returns the post-update [User] (so audit metadata can capture
+     * before/after) or null when no row matched [id].
+     */
+    fun updateDisplayName(
+        id: UUID,
+        displayName: String,
+    ): User?
+
+    /**
      * Paginated, filtered listing for the admin user-management UI.
      * Sorted by display_name then email so the page is stable across
      * round-trips. Use [countAdminUsers] alongside for the total.

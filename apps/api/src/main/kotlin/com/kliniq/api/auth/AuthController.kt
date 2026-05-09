@@ -11,6 +11,7 @@ import com.kliniq.usecase.auth.LoginUseCase
 import com.kliniq.usecase.auth.LogoutUseCase
 import com.kliniq.usecase.auth.RegisterUseCase
 import com.kliniq.usecase.auth.ResetPasswordUseCase
+import com.kliniq.usecase.auth.UpdateProfileUseCase
 import com.kliniq.usecase.auth.VerifyEmailUseCase
 import com.kliniq.usecase.invitation.AcceptInvitationUseCase
 import com.kliniq.usecase.invitation.LookupInvitationUseCase
@@ -21,6 +22,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -29,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/api/v1/auth")
-@Suppress("LongParameterList") // controller orchestrates many use cases via DI
+@Suppress("LongParameterList", "TooManyFunctions") // controller orchestrates many use cases via DI
 class AuthController(
     private val registerUseCase: RegisterUseCase,
     private val verifyEmailUseCase: VerifyEmailUseCase,
@@ -38,6 +40,7 @@ class AuthController(
     private val forgotPasswordUseCase: ForgotPasswordUseCase,
     private val resetPasswordUseCase: ResetPasswordUseCase,
     private val changePasswordUseCase: ChangePasswordUseCase,
+    private val updateProfileUseCase: UpdateProfileUseCase,
     private val acceptInvitationUseCase: AcceptInvitationUseCase,
     private val lookupInvitationUseCase: LookupInvitationUseCase,
     private val cookies: SessionCookieService,
@@ -288,6 +291,26 @@ class AuthController(
             SecurityContextHolder.getContext().authentication as? KliniqAuthentication
                 ?: error("Authenticated request reached /me without KliniqAuthentication")
         return UserResponse.of(auth.user)
+    }
+
+    /**
+     * Self-service profile update. V1 only carries displayName; role,
+     * surgeon flag, specialty, status, and email stay admin-only so an
+     * end user can't promote themselves into a row the booking flow
+     * would offer up. Idempotent on identical input — see
+     * [UpdateProfileUseCase].
+     */
+    @PatchMapping("/me")
+    fun updateMe(
+        @Valid @RequestBody request: UpdateProfileRequest,
+    ): UserResponse {
+        val auth =
+            SecurityContextHolder.getContext().authentication as? KliniqAuthentication
+                ?: error("authenticated endpoint reached without KliniqAuthentication")
+        val result = updateProfileUseCase.updateDisplayName(auth.user.id, request.displayName)
+        return when (result) {
+            is UpdateProfileUseCase.Result.Success -> UserResponse.of(result.user)
+        }
     }
 
     /**

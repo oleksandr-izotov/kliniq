@@ -137,6 +137,14 @@ export const authApi = {
 		return apiRequest<ApiUser>('GET', '/api/v1/auth/me', {});
 	},
 
+	/**
+	 * Self-service profile update. V1 only carries displayName.
+	 * Idempotent on identical input — see UpdateProfileUseCase.
+	 */
+	updateProfile(input: Schemas['UpdateProfileRequest']) {
+		return apiRequest<ApiUser>('PATCH', '/api/v1/auth/me', { body: input });
+	},
+
 	forgotPassword(input: Schemas['ForgotPasswordRequest']) {
 		return apiRequest<ApiMessage>('POST', '/api/v1/auth/password/forgot', { body: input });
 	},

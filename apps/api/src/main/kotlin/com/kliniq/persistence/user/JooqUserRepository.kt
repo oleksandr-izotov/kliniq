@@ -96,6 +96,18 @@ class JooqUserRepository(
         return updated == 1
     }
 
+    override fun updateDisplayName(
+        id: UUID,
+        displayName: String,
+    ): User? =
+        dsl
+            .update(USERS)
+            .set(USERS.DISPLAY_NAME, displayName)
+            .where(USERS.ID.eq(id))
+            .returning()
+            .fetchOne()
+            ?.toDomain()
+
     override fun listAdminUsers(
         filter: UserListFilter,
         page: Int,
