@@ -125,7 +125,7 @@ services:
       - kliniq-prod-net
 
   # Caddy is the public entry point for both local and prod. The site
-  # address inside the Caddyfile is `{$PRIMARY_DOMAIN}`, so:
+  # address comes from $PRIMARY_DOMAIN at container start:
   #   - `PRIMARY_DOMAIN=:80` → plain HTTP (local prod-image testing)
   #   - `PRIMARY_DOMAIN=kliniq.izotov.dev` → Caddy auto-provisions a
   #     Let's Encrypt cert and forces HTTPS. Issued certs persist in the
@@ -133,6 +133,13 @@ services:
   #     through the LE rate limit on every deploy.
   # In real prod the Coolify built-in proxy is disabled for this server
   # so 80/443 are free for Caddy to bind.
+  #
+  # The Caddyfile is supplied inline via Compose's `configs.content`
+  # rather than as a host bind-mount. Coolify rewrites relative bind
+  # paths to its own /data/coolify/applications/<uuid>/ directory and
+  # expects file contents to be populated through its Storages UI;
+  # `configs.content` sidesteps that entire dance — Compose materialises
+  # the file ephemerally inside the container, no host file required.
   caddy:
     image: caddy:2-alpine
     ports:
@@ -144,8 +151,11 @@ services:
     depends_on:
       - api
       - web
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+        mode: 0444
     volumes:
-      - ./compose.prod.Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
     networks:
@@ -156,6 +166,27 @@ volumes:
   redis-data:
   caddy-data:
   caddy-config:
+
+# Inline Caddyfile. Caddy's `{$PRIMARY_DOMAIN}` placeholder is read at
+# runtime — Compose's own variable interpolation only touches `${VAR}`
+# (with the dollar before the brace), so this passes through verbatim.
+configs:
+  caddyfile:
+    content: |
+      {$PRIMARY_DOMAIN} {
+        # API endpoints — backend handles them all under /api/v1, plus
+        # springdoc paths, plus Spring Actuator for healthchecks.
+        @api {
+          path /api/* /v3/api-docs* /swagger-ui* /actuator/*
+        }
+        reverse_proxy @api api:8080
+
+        # Everything else — SPA + SvelteKit-rendered routes.
+        reverse_proxy web:3000
+
+        # Compress responses where it helps.
+        encode gzip zstd
+      }
 
 networks:
   kliniq-prod-net:
