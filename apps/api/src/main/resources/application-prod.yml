@@ -43,7 +43,20 @@ management:
   endpoint:
     health:
       show-details: never
+      # Probes resolve at /actuator/health/liveness and
+      # /actuator/health/readiness so Coolify (and any future k8s
+      # upgrade) can wire dedicated probes without a custom
+      # controller.
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
 
+# Logback config lives in src/main/resources/logback-spring.xml — the
+# prod springProfile block there switches to JSON-per-line on stdout.
 logging:
   level:
     root: INFO

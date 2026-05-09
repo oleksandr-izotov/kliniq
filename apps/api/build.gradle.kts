@@ -75,6 +75,12 @@ dependencies {
     // flagged in the Sprint 1 retro.
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
 
+    // JSON-per-line logging in the prod profile. The dev profile keeps
+    // Spring Boot's default coloured console output (logback-spring.xml
+    // toggles between the two via <springProfile>). Used by Coolify /
+    // any aggregator that consumes structured stdout.
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+
     // DevTools restarts the running app when build/classes/ changes.
     // Pair with `./gradlew --continuous build` in another terminal (or
     // IntelliJ's auto-build) for hot Kotlin reload — `pnpm dev:all`
