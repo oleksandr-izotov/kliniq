@@ -54,6 +54,14 @@ management:
       enabled: true
     readinessstate:
       enabled: true
+    # Mail delivery in prod runs through ResendApiEmailSender over HTTPS
+    # (Hetzner blocks outbound SMTP). Spring Boot's MailHealthIndicator
+    # still tries to TCP-connect to whatever SPRING_MAIL_HOST points at
+    # and hangs ~130s per check on a blocked port — useless noise in
+    # the actuator output. Disable it entirely; Resend's own delivery
+    # logs are the source of truth for mail health in real prod.
+    mail:
+      enabled: false
 
 # Logback config lives in src/main/resources/logback-spring.xml — the
 # prod springProfile block there switches to JSON-per-line on stdout.
