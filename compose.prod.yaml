@@ -104,8 +104,15 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-kliniq_local_prod_test}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      SPRING_MAIL_HOST: mailpit
-      SPRING_MAIL_PORT: 1025
+      # SMTP — Mailpit fallback for local prod-image testing, overridden
+      # in Coolify with Resend's SMTP credentials in real prod. The five
+      # SPRING_MAIL_* vars + the SSL property cover both auth and TLS.
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-mailpit}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-1025}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE:-false}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:-false}
       APP_WEB_BASE_URL: ${APP_WEB_BASE_URL:-http://localhost}
       APP_MAIL_FROM: ${APP_MAIL_FROM:-no-reply@kliniq.local}
     networks:
