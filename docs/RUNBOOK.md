@@ -166,6 +166,104 @@ docker pull ghcr.io/oleksandr-izotov/kliniq-api:latest
 
 Then click Deploy in Coolify.
 
+## SSH hardening
+
+Key-only access; password auth disabled and root login restricted to key login.
+
+**Current `/etc/ssh/sshd_config` overrides:**
+
+```
+PasswordAuthentication no
+PermitRootLogin prohibit-password
+```
+
+**To verify state** (from the host):
+
+```bash
+grep -E '^(PasswordAuthentication|PermitRootLogin)' /etc/ssh/sshd_config
+```
+
+Should print exactly those two lines. Anything else (commented out, set to `yes`) means the box is back in a less-locked state.
+
+**To re-apply if it drifts** (e.g. after a Ubuntu kernel upgrade rewrote sshd_config):
+
+```bash
+# DANGER: edit + reload only — keep the current session open through the
+# whole procedure, open a second terminal to verify the change, only close
+# the first session once the second one works.
+sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+sshd -t            # validate config syntax before applying
+systemctl reload ssh   # graceful — existing sessions keep working
+```
+
+**fail2ban** monitors SSH auth failures and bans source IPs that try to brute-force:
+
+```bash
+fail2ban-client status sshd
+```
+
+Should show `Currently banned`, `Total banned`, etc. If fail2ban isn't installed:
+
+```bash
+apt update && apt install -y fail2ban
+systemctl enable --now fail2ban
+```
+
+The shipped Debian/Ubuntu defaults already include an `sshd` jail with sane thresholds (5 failures → 10-minute ban), so no jail.local editing needed for V1.1.
+
+## Coolify proxy lockdown
+
+Coolify ships with its own `coolify-proxy` (Traefik) container that tries to own ports 80/443. We use our own Caddy in `compose.prod.yaml` as the sole ingress, so the Coolify-proxy must stay dead. It was deleted manually back in Sprint 4 Day 49; the steps below verify it doesn't resurrect.
+
+**Check current state:**
+
+```bash
+docker ps -a --filter 'name=coolify-proxy' --format 'table {{.Names}}\t{{.Status}}'
+```
+
+Empty output ⇒ no container exists. Good.
+
+If a `coolify-proxy` row exists (any status — Up, Exited, Created):
+
+```bash
+docker stop coolify-proxy
+docker rm coolify-proxy
+```
+
+**Persistent disable** so Coolify doesn't recreate it on its own restart:
+
+In the Coolify UI → top-right menu → Servers → localhost → toggle off "Coolify Proxy" if it's still on. Coolify will stop trying to spawn it.
+
+**Reboot test** (only do this during a planned downtime window):
+
+```bash
+reboot
+# wait ~30 s, then SSH back in
+docker ps --filter 'name=coolify-proxy'   # should still be empty
+docker ps --format 'table {{.Names}}\t{{.Status}}'   # caddy-… should be Up
+```
+
+If `coolify-proxy` re-appeared, the Coolify UI toggle didn't stick — escalate via Coolify GitHub issues or pin `coolify-proxy`'s restart policy manually: `docker update --restart=no coolify-proxy && docker stop coolify-proxy`.
+
+## Security headers (Caddy)
+
+CSP and the rest of the standard security-header set are configured inline in `compose.prod.yaml`'s `configs.caddyfile.content` block under the `header { ... }` directive. They apply to every response Caddy returns regardless of upstream (api or web).
+
+**To verify in production:**
+
+```bash
+curl -sI https://kliniq.izotov.dev | grep -iE '(content-security|x-content|referrer|permissions|strict-transport)'
+```
+
+Should print five headers: `Content-Security-Policy`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security`.
+
+**If a SPA route breaks with CSP errors** (DevTools → Console → `Refused to load ... because it violates the following Content Security Policy directive`):
+
+1. Identify which directive blocked it (the error names the specific directive).
+2. Either fix the code to stop loading the offending resource, OR — if the resource is load-bearing third-party — add the origin to the matching directive in `compose.prod.yaml`. Connect-src already widens for Sentry's ingest endpoints; add the same way for any new third party.
+3. Redeploy via Coolify. Don't loosen to `'unsafe-inline'` / `'unsafe-eval'` unless absolutely necessary; those defeat the point of CSP.
+
 ## Sentry
 
 Errors land at `https://oleksandrs-firma.sentry.io` (free hosted tier, 5k events / 7-day retention) split across two projects:
