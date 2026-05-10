@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { sentrySvelteKit } from '@sentry/sveltekit';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -16,8 +17,25 @@ const certPath = path.join(certsDir, 'localhost.pem');
 const keyPath = path.join(certsDir, 'localhost-key.pem');
 const certsExist = fs.existsSync(certPath) && fs.existsSync(keyPath);
 
+// Sentry source maps upload runs only when SENTRY_AUTH_TOKEN is present at
+// build time (Coolify passes it as a Docker build arg in compose.prod.yaml).
+// Without the token the plugin still instruments the build but skips the
+// upload step, so local `pnpm build` keeps working without secrets.
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN;
+
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()],
+	plugins: [
+		sentrySvelteKit({
+			autoUploadSourceMaps: Boolean(sentryAuthToken),
+			sourceMapsUploadOptions: {
+				org: 'oleksandrs-firma',
+				project: 'kliniq-web',
+				authToken: sentryAuthToken
+			}
+		}),
+		tailwindcss(),
+		sveltekit()
+	],
 	server: {
 		port: 5173,
 		strictPort: true,

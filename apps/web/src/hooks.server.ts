@@ -1,6 +1,10 @@
 import { dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
-import type { Handle } from '@sveltejs/kit';
+import { env as publicEnv } from '$env/dynamic/public';
+import * as Sentry from '@sentry/sveltekit';
+import { handleErrorWithSentry, sentryHandle } from '@sentry/sveltekit';
+import { sequence } from '@sveltejs/kit/hooks';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
 
 /**
  * Direct backend URL for server-to-server /me lookups. Falls back to the
@@ -20,12 +24,23 @@ if (dev) {
 	process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 }
 
+// Server-side Sentry init mirrors the client init. The same DSN string is
+// shared via $env/dynamic/public because it's a public identifier — the
+// "PUBLIC_" prefix marks it safe to leak into the client bundle, not
+// secret. `enabled: false` keeps the SDK silent in local dev.
+Sentry.init({
+	dsn: publicEnv.PUBLIC_SENTRY_DSN,
+	enabled: Boolean(publicEnv.PUBLIC_SENTRY_DSN),
+	environment: 'prod',
+	tracesSampleRate: 0
+});
+
 /**
  * Resolve the current user once per request from the backend session
  * cookie. Server load functions and pages then read event.locals.user
  * (and $page.data.user on the client) without each one re-fetching /me.
  */
-export const handle: Handle = async ({ event, resolve }) => {
+const meHandle: Handle = async ({ event, resolve }) => {
 	const cookieHeader = event.request.headers.get('cookie') ?? '';
 
 	try {
@@ -40,3 +55,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	return resolve(event);
 };
+
+// sentryHandle() must run first so it can wrap downstream handlers in its
+// own span and capture any error they throw.
+export const handle: Handle = sequence(sentryHandle(), meHandle);
+
+export const handleError: HandleServerError = handleErrorWithSentry();

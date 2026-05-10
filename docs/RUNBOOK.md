@@ -168,9 +168,16 @@ Then click Deploy in Coolify.
 
 ## Sentry
 
-Errors land at `https://sentry.io` → org `kliniq` → project `kliniq-api` (free hosted tier, 5k events / 7-day retention).
+Errors land at `https://oleksandrs-firma.sentry.io` (free hosted tier, 5k events / 7-day retention) split across two projects:
 
-**DSN:** stored in Coolify env var `SENTRY_DSN`. Format: `https://<public>@oXXXX.ingest.sentry.io/<project>`.
+- **`kliniq-api`** — Spring Boot api errors. DSN in Coolify env var `SENTRY_DSN`. Wired via `sentry-spring-boot-starter-jakarta` + logback appender (see Day 53 commit).
+- **`kliniq-web`** — SvelteKit web errors (both client- and server-side). DSN in Coolify env var `PUBLIC_SENTRY_DSN` (the `PUBLIC_` prefix is mandatory for SvelteKit to expose the var to the client bundle via `$env/dynamic/public`). Wired via `@sentry/sveltekit` SDK in `hooks.client.ts` + `hooks.server.ts`.
+
+Source-map upload for `kliniq-web` runs at Docker build time inside Coolify's deploy host. The `SENTRY_AUTH_TOKEN` env var (org-scoped Sentry auth token, `project:releases` scope only) is passed as a Docker build arg via `compose.prod.yaml` and reaches the Sentry vite plugin in `apps/web/vite.config.ts`. The runtime image does NOT carry the token — it's scoped to the build stage only. Without the token (e.g. running `docker compose -f compose.prod.yaml build` locally without the env var), the plugin skips upload and emits a warning; the build itself still succeeds.
+
+**DSN formats:**
+- `kliniq-api`: `https://<public>@oXXXX.ingest.sentry.io/<project>`
+- `kliniq-web`: same format
 
 **Release tag** (optional): set `SENTRY_RELEASE` to the deployed Git SHA so the dashboard groups errors by build. Coolify doesn't pass the SHA automatically; leave unset if you don't care.
 
@@ -195,6 +202,20 @@ Errors land at `https://sentry.io` → org `kliniq` → project `kliniq-api` (fr
 5. Remove `APP_SENTRY_SMOKE_ENABLED` from Coolify env (or delete `SentrySmokeController.kt`) and redeploy. The route 404s when the flag is off.
 
 **Day-to-day:** Sentry dashboard sends an email on the first occurrence of a new error fingerprint. Reply to that thread when you've fixed it — Sentry keeps the resolved state and reopens the issue if the same fingerprint fires post-fix.
+
+## UptimeRobot
+
+External liveness monitor: `https://uptimerobot.com/dashboard` → monitor `kliniq-api liveness` pings `https://kliniq.izotov.dev/actuator/health/liveness` every 5 minutes. Alert fires after 2 consecutive failures (~10 min real downtime) to the maintainer's email.
+
+The endpoint is Spring Boot's `LivenessStateHealthIndicator` and returns `{"status":"UP"}` once the api JVM has finished starting; it does NOT check Postgres / Redis reachability (that's `/actuator/health/readiness`, which we deliberately don't expose externally — Caddy already gates traffic to `/actuator/health/*` paths and readiness would flap during deploys).
+
+**If you get a DOWN alert:**
+
+1. `curl -I https://kliniq.izotov.dev/actuator/health/liveness` from your laptop — does it 200?
+2. If yes, false alarm (transient network blip from UptimeRobot's probe nodes); resolve in dashboard.
+3. If no, SSH in and walk the "Site is down" runbook above.
+
+**To pause the monitor during planned maintenance:** dashboard → monitor row → toggle off. Don't forget to flip it back on — UptimeRobot doesn't auto-resume.
 
 ## Promoting a user to ADMIN
 

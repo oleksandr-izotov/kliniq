@@ -36,6 +36,16 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 # Copy sources and build.
 COPY apps/web/ apps/web/
 
+# Sentry source-map upload. SENTRY_AUTH_TOKEN is passed in via
+# compose.prod.yaml's `build.args` (Coolify env var). When unset (local
+# `docker build` without the var, or any non-prod build path), the Sentry
+# vite plugin still instruments but skips the upload step — see
+# apps/web/vite.config.ts. The ENV is scoped to this build stage only;
+# the runtime image starts from a fresh `FROM node:22-alpine` below and
+# doesn't carry the token forward.
+ARG SENTRY_AUTH_TOKEN=
+ENV SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN
+
 RUN pnpm --filter ./apps/web run build
 
 # ---- runtime --------------------------------------------------------------

@@ -126,6 +126,12 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        # Sentry source-map upload token. Build-time only — never baked
+        # into the runtime image. Coolify provides the value as an env var;
+        # local `docker compose ... up --build` works without it (plugin
+        # skips upload). See apps/web/vite.config.ts.
+        SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
     depends_on:
       api:
         condition: service_started
@@ -139,6 +145,10 @@ services:
       # compose network. Plain HTTP is fine here: traffic never leaves
       # the host bridge, TLS terminates at Caddy on the public edge.
       BACKEND_URL: http://api:8080
+      # Sentry web DSN. Public identifier — exposed to the client bundle
+      # via SvelteKit's $env/dynamic/public. SDK no-ops on init when
+      # unset, so local prod-test stays silent.
+      PUBLIC_SENTRY_DSN: ${PUBLIC_SENTRY_DSN:-}
     networks:
       - kliniq-prod-net
 
