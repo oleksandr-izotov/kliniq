@@ -80,160 +80,156 @@
 	<title>Audit log · Admin · Kliniq</title>
 </svelte:head>
 
-<main class="min-h-screen bg-background p-6">
-	<div class="mx-auto w-full max-w-7xl space-y-4">
-		<header class="space-y-1">
-			<a href="/" class="text-sm text-muted-foreground hover:text-foreground">← Back to home</a>
-			<h1 class="text-3xl font-bold tracking-tight">Audit log</h1>
-			<p class="text-sm text-muted-foreground">
-				Append-only history of every state change. Click a row to see the before/after JSON.
-			</p>
-		</header>
+<div class="space-y-4">
+	<header class="space-y-1">
+		<h1 class="text-3xl font-bold tracking-tight">Audit log</h1>
+		<p class="text-sm text-muted-foreground">
+			Append-only history of every state change. Click a row to see the before/after JSON.
+		</p>
+	</header>
 
-		<!-- Filters -->
-		<form
-			class="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto_auto_auto]"
-			onsubmit={(e) => {
-				e.preventDefault();
-				applyFilters();
-			}}
+	<!-- Filters -->
+	<form
+		class="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto_auto_auto]"
+		onsubmit={(e) => {
+			e.preventDefault();
+			applyFilters();
+		}}
+	>
+		<div class="space-y-1">
+			<Label for="filter-entity">Entity type</Label>
+			<Input
+				id="filter-entity"
+				type="text"
+				bind:value={entityType}
+				placeholder="booking, user, …"
+				maxlength={50}
+			/>
+		</div>
+		<div class="space-y-1">
+			<Label for="filter-action">Action</Label>
+			<Input
+				id="filter-action"
+				type="text"
+				bind:value={action}
+				placeholder="booking.created, …"
+				maxlength={100}
+			/>
+		</div>
+		<div class="space-y-1">
+			<Label for="filter-actor">Actor (UUID)</Label>
+			<Input
+				id="filter-actor"
+				type="text"
+				bind:value={actorUserId}
+				placeholder="user id"
+				maxlength={36}
+			/>
+		</div>
+		<div class="space-y-1">
+			<Label for="filter-from">From</Label>
+			<Input id="filter-from" type="date" bind:value={fromDate} />
+		</div>
+		<div class="space-y-1">
+			<Label for="filter-to">To</Label>
+			<Input id="filter-to" type="date" bind:value={toDate} />
+		</div>
+		<div class="flex items-end">
+			<Button type="submit" variant="outline" size="sm" disabled={loading}>Filter</Button>
+		</div>
+	</form>
+
+	{#if loading && !page}
+		<p class="text-sm text-muted-foreground">Loading…</p>
+	{:else if listError}
+		<p
+			class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+			role="alert"
 		>
-			<div class="space-y-1">
-				<Label for="filter-entity">Entity type</Label>
-				<Input
-					id="filter-entity"
-					type="text"
-					bind:value={entityType}
-					placeholder="booking, user, …"
-					maxlength={50}
-				/>
-			</div>
-			<div class="space-y-1">
-				<Label for="filter-action">Action</Label>
-				<Input
-					id="filter-action"
-					type="text"
-					bind:value={action}
-					placeholder="booking.created, …"
-					maxlength={100}
-				/>
-			</div>
-			<div class="space-y-1">
-				<Label for="filter-actor">Actor (UUID)</Label>
-				<Input
-					id="filter-actor"
-					type="text"
-					bind:value={actorUserId}
-					placeholder="user id"
-					maxlength={36}
-				/>
-			</div>
-			<div class="space-y-1">
-				<Label for="filter-from">From</Label>
-				<Input id="filter-from" type="date" bind:value={fromDate} />
-			</div>
-			<div class="space-y-1">
-				<Label for="filter-to">To</Label>
-				<Input id="filter-to" type="date" bind:value={toDate} />
-			</div>
-			<div class="flex items-end">
-				<Button type="submit" variant="outline" size="sm" disabled={loading}>Filter</Button>
-			</div>
-		</form>
-
-		{#if loading && !page}
-			<p class="text-sm text-muted-foreground">Loading…</p>
-		{:else if listError}
-			<p
-				class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-				role="alert"
-			>
-				{listError}
-			</p>
-		{:else if page}
-			<div class="overflow-x-auto rounded-2xl border">
-				<table class="w-full text-sm">
-					<thead class="bg-muted/40 text-left text-xs text-muted-foreground uppercase">
-						<tr>
-							<th class="px-3 py-2">When</th>
-							<th class="px-3 py-2">Action</th>
-							<th class="px-3 py-2">Entity</th>
-							<th class="px-3 py-2">Actor</th>
-							<th class="px-3 py-2"></th>
+			{listError}
+		</p>
+	{:else if page}
+		<div class="overflow-x-auto rounded-2xl border">
+			<table class="w-full text-sm">
+				<thead class="bg-muted/40 text-left text-xs text-muted-foreground uppercase">
+					<tr>
+						<th class="px-3 py-2">When</th>
+						<th class="px-3 py-2">Action</th>
+						<th class="px-3 py-2">Entity</th>
+						<th class="px-3 py-2">Actor</th>
+						<th class="px-3 py-2"></th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each page.items as e (e.id)}
+						<tr
+							class="cursor-pointer border-t hover:bg-muted/40 {selected?.id === e.id
+								? 'bg-muted/50'
+								: ''}"
+							onclick={() => (selected = e)}
+						>
+							<td class="px-3 py-2 font-mono text-xs whitespace-nowrap text-muted-foreground">
+								{formatDateTime(e.createdAt)}
+							</td>
+							<td class="px-3 py-2 font-mono text-xs">{e.action}</td>
+							<td class="px-3 py-2">
+								<span class="text-xs text-muted-foreground">{e.entityType}</span>
+								{#if e.entityId}
+									<br />
+									<span class="font-mono text-[10px] text-muted-foreground/70">{e.entityId}</span>
+								{/if}
+							</td>
+							<td class="px-3 py-2">
+								{#if e.actorUserId}
+									<span class="font-mono text-[10px] text-muted-foreground/70">{e.actorUserId}</span
+									>
+								{:else}
+									<span class="text-xs text-muted-foreground italic">system</span>
+								{/if}
+							</td>
+							<td class="px-3 py-2 text-right">
+								<span class="text-xs text-muted-foreground">View →</span>
+							</td>
 						</tr>
-					</thead>
-					<tbody>
-						{#each page.items as e (e.id)}
-							<tr
-								class="cursor-pointer border-t hover:bg-muted/40 {selected?.id === e.id
-									? 'bg-muted/50'
-									: ''}"
-								onclick={() => (selected = e)}
-							>
-								<td class="px-3 py-2 font-mono text-xs whitespace-nowrap text-muted-foreground">
-									{formatDateTime(e.createdAt)}
-								</td>
-								<td class="px-3 py-2 font-mono text-xs">{e.action}</td>
-								<td class="px-3 py-2">
-									<span class="text-xs text-muted-foreground">{e.entityType}</span>
-									{#if e.entityId}
-										<br />
-										<span class="font-mono text-[10px] text-muted-foreground/70">{e.entityId}</span>
-									{/if}
-								</td>
-								<td class="px-3 py-2">
-									{#if e.actorUserId}
-										<span class="font-mono text-[10px] text-muted-foreground/70"
-											>{e.actorUserId}</span
-										>
-									{:else}
-										<span class="text-xs text-muted-foreground italic">system</span>
-									{/if}
-								</td>
-								<td class="px-3 py-2 text-right">
-									<span class="text-xs text-muted-foreground">View →</span>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 
-			<footer class="flex items-center justify-between text-sm">
-				<p class="text-muted-foreground">
-					Showing {page.items.length} of {page.total}
-				</p>
-				<div class="flex items-center gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						onclick={() => {
-							pageIndex = Math.max(0, pageIndex - 1);
-							void refresh();
-						}}
-						disabled={isFirstPage || loading}
-					>
-						← Prev
-					</Button>
-					<span class="text-xs text-muted-foreground">
-						Page {pageIndex + 1} of {totalPages}
-					</span>
-					<Button
-						variant="outline"
-						size="sm"
-						onclick={() => {
-							pageIndex += 1;
-							void refresh();
-						}}
-						disabled={isLastPage || loading}
-					>
-						Next →
-					</Button>
-				</div>
-			</footer>
-		{/if}
-	</div>
-</main>
+		<footer class="flex items-center justify-between text-sm">
+			<p class="text-muted-foreground">
+				Showing {page.items.length} of {page.total}
+			</p>
+			<div class="flex items-center gap-2">
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={() => {
+						pageIndex = Math.max(0, pageIndex - 1);
+						void refresh();
+					}}
+					disabled={isFirstPage || loading}
+				>
+					← Prev
+				</Button>
+				<span class="text-xs text-muted-foreground">
+					Page {pageIndex + 1} of {totalPages}
+				</span>
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={() => {
+						pageIndex += 1;
+						void refresh();
+					}}
+					disabled={isLastPage || loading}
+				>
+					Next →
+				</Button>
+			</div>
+		</footer>
+	{/if}
+</div>
 
 {#if selected}
 	<aside

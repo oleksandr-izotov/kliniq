@@ -152,167 +152,163 @@
 	<title>Invitations · Admin · Kliniq</title>
 </svelte:head>
 
-<main class="min-h-screen bg-background p-6">
-	<div class="mx-auto w-full max-w-4xl space-y-6">
-		<header class="space-y-1">
-			<a href="/" class="text-sm text-muted-foreground hover:text-foreground">← Back to home</a>
-			<h1 class="text-3xl font-bold tracking-tight">Invitations</h1>
-			<p class="text-sm text-muted-foreground">
-				Issue email-based invitations with a pre-set role and surgeon flag. The recipient picks
-				their own password on the accept page; the new account lands verified, no separate email
-				round-trip.
-			</p>
-		</header>
+<div class="mx-auto w-full max-w-4xl space-y-6">
+	<header class="space-y-1">
+		<h1 class="text-3xl font-bold tracking-tight">Invitations</h1>
+		<p class="text-sm text-muted-foreground">
+			Issue email-based invitations with a pre-set role and surgeon flag. The recipient picks their
+			own password on the accept page; the new account lands verified, no separate email round-trip.
+		</p>
+	</header>
 
-		<!-- Create -->
-		<Card.Root class="rounded-2xl">
-			<Card.Header class="px-6 pt-6">
-				<Card.Title>Invite a new user</Card.Title>
-				<Card.Description>
-					An email goes out with a one-shot accept link valid for 7 days.
-				</Card.Description>
-			</Card.Header>
-			<Card.Content class="px-6 pb-6">
-				<form onsubmit={create} class="space-y-4">
-					<div class="grid gap-4 sm:grid-cols-2">
+	<!-- Create -->
+	<Card.Root class="rounded-2xl">
+		<Card.Header class="px-6 pt-6">
+			<Card.Title>Invite a new user</Card.Title>
+			<Card.Description>
+				An email goes out with a one-shot accept link valid for 7 days.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="px-6 pb-6">
+			<form onsubmit={create} class="space-y-4">
+				<div class="grid gap-4 sm:grid-cols-2">
+					<div class="space-y-2">
+						<Label for="inv-email">Email</Label>
+						<Input
+							id="inv-email"
+							type="email"
+							bind:value={newEmail}
+							disabled={creating}
+							maxlength={254}
+							placeholder="newdoc@example.com"
+							required
+						/>
+					</div>
+					<div class="space-y-2">
+						<Label for="inv-role">Role</Label>
+						<select
+							id="inv-role"
+							bind:value={newRole}
+							disabled={creating}
+							class="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+						>
+							<option value="STAFF">Staff</option>
+							<option value="MANAGER">Manager</option>
+							<option value="ADMIN">Admin</option>
+						</select>
+					</div>
+				</div>
+				<div class="grid gap-4 sm:grid-cols-2">
+					<label class="flex items-center gap-2 text-sm">
+						<input
+							type="checkbox"
+							bind:checked={newIsSurgeon}
+							disabled={creating}
+							class="h-4 w-4"
+						/>
+						Flag as surgeon
+					</label>
+					{#if newIsSurgeon}
 						<div class="space-y-2">
-							<Label for="inv-email">Email</Label>
-							<Input
-								id="inv-email"
-								type="email"
-								bind:value={newEmail}
-								disabled={creating}
-								maxlength={254}
-								placeholder="newdoc@example.com"
-								required
-							/>
-						</div>
-						<div class="space-y-2">
-							<Label for="inv-role">Role</Label>
+							<Label for="inv-specialty">Specialty</Label>
 							<select
-								id="inv-role"
-								bind:value={newRole}
+								id="inv-specialty"
+								bind:value={newSpecialty}
 								disabled={creating}
 								class="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
 							>
-								<option value="STAFF">Staff</option>
-								<option value="MANAGER">Manager</option>
-								<option value="ADMIN">Admin</option>
+								{#each SPECIALTIES as s (s)}
+									<option value={s}>{s.toLowerCase()}</option>
+								{/each}
 							</select>
 						</div>
-					</div>
-					<div class="grid gap-4 sm:grid-cols-2">
-						<label class="flex items-center gap-2 text-sm">
-							<input
-								type="checkbox"
-								bind:checked={newIsSurgeon}
-								disabled={creating}
-								class="h-4 w-4"
-							/>
-							Flag as surgeon
-						</label>
-						{#if newIsSurgeon}
-							<div class="space-y-2">
-								<Label for="inv-specialty">Specialty</Label>
-								<select
-									id="inv-specialty"
-									bind:value={newSpecialty}
-									disabled={creating}
-									class="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-								>
-									{#each SPECIALTIES as s (s)}
-										<option value={s}>{s.toLowerCase()}</option>
-									{/each}
-								</select>
-							</div>
-						{/if}
-					</div>
-					<Button type="submit" disabled={creating}>
-						{creating ? 'Sending…' : 'Send invitation'}
-					</Button>
-				</form>
-			</Card.Content>
-		</Card.Root>
+					{/if}
+				</div>
+				<Button type="submit" disabled={creating}>
+					{creating ? 'Sending…' : 'Send invitation'}
+				</Button>
+			</form>
+		</Card.Content>
+	</Card.Root>
 
-		<!-- List -->
-		<section class="space-y-3">
-			<div class="flex items-center justify-between">
-				<h2 class="text-xl font-semibold">All invitations</h2>
-				<label class="flex items-center gap-2 text-sm">
-					<input type="checkbox" bind:checked={includeHistory} onchange={refresh} class="h-4 w-4" />
-					Include accepted &amp; revoked
-				</label>
-			</div>
+	<!-- List -->
+	<section class="space-y-3">
+		<div class="flex items-center justify-between">
+			<h2 class="text-xl font-semibold">All invitations</h2>
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" bind:checked={includeHistory} onchange={refresh} class="h-4 w-4" />
+				Include accepted &amp; revoked
+			</label>
+		</div>
 
-			{#if loading}
-				<p class="text-sm text-muted-foreground">Loading…</p>
-			{:else if listError}
-				<p
-					class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-					role="alert"
-				>
-					{listError}
-				</p>
-			{:else if invitations.length === 0}
-				<Card.Root class="rounded-2xl">
-					<Card.Content class="px-6 py-8 text-center text-sm text-muted-foreground">
-						No invitations to show.
-					</Card.Content>
-				</Card.Root>
-			{:else}
-				<ul class="space-y-3">
-					{#each invitations as invite (invite.id)}
-						{@const status = statusOf(invite)}
-						<li>
-							<Card.Root class="rounded-2xl">
-								<Card.Content class="space-y-3 px-6 py-5">
-									<div class="flex items-start justify-between gap-3">
-										<div class="space-y-1">
-											<p class="font-medium">
-												{invite.email}
-												<span
-													class="ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs tracking-wide uppercase {statusBadge(
-														status
-													)}"
-												>
-													{status}
-												</span>
-											</p>
-											<p class="text-sm text-muted-foreground">
-												{invite.role.toLowerCase()}
-												{#if invite.isSurgeon}
-													· surgeon ({invite.specialty?.toLowerCase()})
-												{/if}
-											</p>
-											<p class="text-xs text-muted-foreground">
-												Issued {formatDateTime(invite.issuedAt)} · Expires {formatDateTime(
-													invite.expiresAt
-												)}
-												{#if invite.acceptedAt}
-													· Accepted {formatDateTime(invite.acceptedAt)}
-												{/if}
-												{#if invite.revokedAt}
-													· Revoked {formatDateTime(invite.revokedAt)}
-												{/if}
-											</p>
-										</div>
-										{#if status === 'pending'}
-											<Button
-												variant="outline"
-												size="sm"
-												onclick={() => revoke(invite)}
-												disabled={revokingId === invite.id}
+		{#if loading}
+			<p class="text-sm text-muted-foreground">Loading…</p>
+		{:else if listError}
+			<p
+				class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+				role="alert"
+			>
+				{listError}
+			</p>
+		{:else if invitations.length === 0}
+			<Card.Root class="rounded-2xl">
+				<Card.Content class="px-6 py-8 text-center text-sm text-muted-foreground">
+					No invitations to show.
+				</Card.Content>
+			</Card.Root>
+		{:else}
+			<ul class="space-y-3">
+				{#each invitations as invite (invite.id)}
+					{@const status = statusOf(invite)}
+					<li>
+						<Card.Root class="rounded-2xl">
+							<Card.Content class="space-y-3 px-6 py-5">
+								<div class="flex items-start justify-between gap-3">
+									<div class="space-y-1">
+										<p class="font-medium">
+											{invite.email}
+											<span
+												class="ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs tracking-wide uppercase {statusBadge(
+													status
+												)}"
 											>
-												{revokingId === invite.id ? 'Revoking…' : 'Revoke'}
-											</Button>
-										{/if}
+												{status}
+											</span>
+										</p>
+										<p class="text-sm text-muted-foreground">
+											{invite.role.toLowerCase()}
+											{#if invite.isSurgeon}
+												· surgeon ({invite.specialty?.toLowerCase()})
+											{/if}
+										</p>
+										<p class="text-xs text-muted-foreground">
+											Issued {formatDateTime(invite.issuedAt)} · Expires {formatDateTime(
+												invite.expiresAt
+											)}
+											{#if invite.acceptedAt}
+												· Accepted {formatDateTime(invite.acceptedAt)}
+											{/if}
+											{#if invite.revokedAt}
+												· Revoked {formatDateTime(invite.revokedAt)}
+											{/if}
+										</p>
 									</div>
-								</Card.Content>
-							</Card.Root>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</section>
-	</div>
-</main>
+									{#if status === 'pending'}
+										<Button
+											variant="outline"
+											size="sm"
+											onclick={() => revoke(invite)}
+											disabled={revokingId === invite.id}
+										>
+											{revokingId === invite.id ? 'Revoking…' : 'Revoke'}
+										</Button>
+									{/if}
+								</div>
+							</Card.Content>
+						</Card.Root>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</section>
+</div>

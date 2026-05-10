@@ -171,205 +171,196 @@
 	<title>Users · Admin · Kliniq</title>
 </svelte:head>
 
-<main class="min-h-screen bg-background p-6">
-	<div class="mx-auto w-full max-w-6xl space-y-4">
-		<header class="space-y-1">
-			<a href="/" class="text-sm text-muted-foreground hover:text-foreground">← Back to home</a>
-			<h1 class="text-3xl font-bold tracking-tight">Users</h1>
-			<p class="text-sm text-muted-foreground">
-				Change roles, flag surgeons, disable accounts. Disabling logs the user out everywhere. You
-				can't demote or disable yourself — ask another admin.
-			</p>
-		</header>
+<div class="space-y-4">
+	<header class="space-y-1">
+		<h1 class="text-3xl font-bold tracking-tight">Users</h1>
+		<p class="text-sm text-muted-foreground">
+			Change roles, flag surgeons, disable accounts. Disabling logs the user out everywhere. You
+			can't demote or disable yourself — ask another admin.
+		</p>
+	</header>
 
-		<!-- Filters -->
-		<form
-			class="grid gap-3 sm:grid-cols-[1fr_auto_auto_auto]"
-			onsubmit={(e) => {
-				e.preventDefault();
-				applyFilters();
-			}}
-		>
-			<div class="space-y-1">
-				<Label for="filter-q">Search</Label>
-				<Input
-					id="filter-q"
-					type="text"
-					bind:value={q}
-					placeholder="name or email"
-					maxlength={100}
-				/>
-			</div>
-			<div class="space-y-1">
-				<Label for="filter-role">Role</Label>
-				<select
-					id="filter-role"
-					bind:value={roleFilter}
-					class="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-				>
-					<option value="">Any</option>
-					<option value="ADMIN">Admin</option>
-					<option value="MANAGER">Manager</option>
-					<option value="STAFF">Staff</option>
-				</select>
-			</div>
-			<div class="space-y-1">
-				<Label for="filter-status">Status</Label>
-				<select
-					id="filter-status"
-					bind:value={statusFilter}
-					class="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-				>
-					<option value="">Any</option>
-					<option value="ACTIVE">Active</option>
-					<option value="DISABLED">Disabled</option>
-				</select>
-			</div>
-			<div class="flex items-end">
-				<Button type="submit" variant="outline" size="sm" disabled={loading}>Filter</Button>
-			</div>
-		</form>
-
-		{#if loading && !page}
-			<p class="text-sm text-muted-foreground">Loading…</p>
-		{:else if listError}
-			<p
-				class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-				role="alert"
+	<!-- Filters -->
+	<form
+		class="grid gap-3 sm:grid-cols-[1fr_auto_auto_auto]"
+		onsubmit={(e) => {
+			e.preventDefault();
+			applyFilters();
+		}}
+	>
+		<div class="space-y-1">
+			<Label for="filter-q">Search</Label>
+			<Input id="filter-q" type="text" bind:value={q} placeholder="name or email" maxlength={100} />
+		</div>
+		<div class="space-y-1">
+			<Label for="filter-role">Role</Label>
+			<select
+				id="filter-role"
+				bind:value={roleFilter}
+				class="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
 			>
-				{listError}
-			</p>
-		{:else if page}
-			<div class="overflow-x-auto rounded-2xl border">
-				<table class="w-full text-sm">
-					<thead class="bg-muted/40 text-left text-xs text-muted-foreground uppercase">
-						<tr>
-							<th class="px-3 py-2">User</th>
-							<th class="px-3 py-2">Role</th>
-							<th class="px-3 py-2">Surgeon</th>
-							<th class="px-3 py-2">Status</th>
-							<th class="px-3 py-2 text-right">Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each page.items as u (u.id)}
-							{@const isSelf = u.id === data.user.id}
-							{@const isPending = pendingId === u.id}
-							<tr class="border-t" class:opacity-60={isPending}>
-								<td class="px-3 py-2">
-									<div class="font-medium">
-										{u.displayName}
-										{#if isSelf}
-											<span class="text-xs text-muted-foreground">(you)</span>
-										{/if}
-									</div>
-									<div class="text-xs text-muted-foreground">{u.email}</div>
-								</td>
-								<td class="px-3 py-2">
-									<select
-										value={u.role}
-										onchange={(e) =>
-											changeRole(u, (e.currentTarget as HTMLSelectElement).value as AdminUserRole)}
-										disabled={isPending}
-										class="h-8 rounded-md border border-input bg-background px-2 text-xs"
-									>
-										<option value="ADMIN">Admin</option>
-										<option value="MANAGER">Manager</option>
-										<option value="STAFF">Staff</option>
-									</select>
-									<span
-										class="ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] tracking-wide uppercase {roleBadge(
-											u.role
-										)}"
-									>
-										{u.role.toLowerCase()}
-									</span>
-								</td>
-								<td class="px-3 py-2">
-									<label class="inline-flex items-center gap-2">
-										<input
-											type="checkbox"
-											checked={u.isSurgeon}
-											disabled={isPending}
-											onchange={(e) =>
-												toggleSurgeon(u, (e.currentTarget as HTMLInputElement).checked)}
-											class="h-4 w-4"
-										/>
-										{#if u.isSurgeon}
-											<select
-												value={u.specialty ?? 'GENERAL'}
-												onchange={(e) =>
-													changeSpecialty(
-														u,
-														(e.currentTarget as HTMLSelectElement).value as AdminUserSpecialty
-													)}
-												disabled={isPending}
-												class="h-8 rounded-md border border-input bg-background px-2 text-xs"
-											>
-												{#each SPECIALTIES as s (s)}
-													<option value={s}>{s.toLowerCase()}</option>
-												{/each}
-											</select>
-										{/if}
-									</label>
-								</td>
-								<td class="px-3 py-2">
-									<span
-										class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] tracking-wide uppercase {statusBadge(
-											u.status
-										)}"
-									>
-										{u.status.toLowerCase()}
-									</span>
-								</td>
-								<td class="px-3 py-2 text-right">
-									<Button
-										variant="outline"
-										size="sm"
-										onclick={() => toggleStatus(u)}
-										disabled={isPending}
-									>
-										{u.status === 'ACTIVE' ? 'Disable' : 'Re-enable'}
-									</Button>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
+				<option value="">Any</option>
+				<option value="ADMIN">Admin</option>
+				<option value="MANAGER">Manager</option>
+				<option value="STAFF">Staff</option>
+			</select>
+		</div>
+		<div class="space-y-1">
+			<Label for="filter-status">Status</Label>
+			<select
+				id="filter-status"
+				bind:value={statusFilter}
+				class="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+			>
+				<option value="">Any</option>
+				<option value="ACTIVE">Active</option>
+				<option value="DISABLED">Disabled</option>
+			</select>
+		</div>
+		<div class="flex items-end">
+			<Button type="submit" variant="outline" size="sm" disabled={loading}>Filter</Button>
+		</div>
+	</form>
 
-			<footer class="flex items-center justify-between text-sm">
-				<p class="text-muted-foreground">
-					Showing {page.items.length} of {page.total}
-				</p>
-				<div class="flex items-center gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						onclick={() => {
-							pageIndex = Math.max(0, pageIndex - 1);
-							void refresh();
-						}}
-						disabled={isFirstPage || loading}
-					>
-						← Prev
-					</Button>
-					<span class="text-xs text-muted-foreground">
-						Page {pageIndex + 1} of {totalPages}
-					</span>
-					<Button
-						variant="outline"
-						size="sm"
-						onclick={() => {
-							pageIndex += 1;
-							void refresh();
-						}}
-						disabled={isLastPage || loading}
-					>
-						Next →
-					</Button>
-				</div>
-			</footer>
-		{/if}
-	</div>
-</main>
+	{#if loading && !page}
+		<p class="text-sm text-muted-foreground">Loading…</p>
+	{:else if listError}
+		<p
+			class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+			role="alert"
+		>
+			{listError}
+		</p>
+	{:else if page}
+		<div class="overflow-x-auto rounded-2xl border">
+			<table class="w-full text-sm">
+				<thead class="bg-muted/40 text-left text-xs text-muted-foreground uppercase">
+					<tr>
+						<th class="px-3 py-2">User</th>
+						<th class="px-3 py-2">Role</th>
+						<th class="px-3 py-2">Surgeon</th>
+						<th class="px-3 py-2">Status</th>
+						<th class="px-3 py-2 text-right">Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each page.items as u (u.id)}
+						{@const isSelf = u.id === data.user.id}
+						{@const isPending = pendingId === u.id}
+						<tr class="border-t" class:opacity-60={isPending}>
+							<td class="px-3 py-2">
+								<div class="font-medium">
+									{u.displayName}
+									{#if isSelf}
+										<span class="text-xs text-muted-foreground">(you)</span>
+									{/if}
+								</div>
+								<div class="text-xs text-muted-foreground">{u.email}</div>
+							</td>
+							<td class="px-3 py-2">
+								<select
+									value={u.role}
+									onchange={(e) =>
+										changeRole(u, (e.currentTarget as HTMLSelectElement).value as AdminUserRole)}
+									disabled={isPending}
+									class="h-8 rounded-md border border-input bg-background px-2 text-xs"
+								>
+									<option value="ADMIN">Admin</option>
+									<option value="MANAGER">Manager</option>
+									<option value="STAFF">Staff</option>
+								</select>
+								<span
+									class="ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] tracking-wide uppercase {roleBadge(
+										u.role
+									)}"
+								>
+									{u.role.toLowerCase()}
+								</span>
+							</td>
+							<td class="px-3 py-2">
+								<label class="inline-flex items-center gap-2">
+									<input
+										type="checkbox"
+										checked={u.isSurgeon}
+										disabled={isPending}
+										onchange={(e) =>
+											toggleSurgeon(u, (e.currentTarget as HTMLInputElement).checked)}
+										class="h-4 w-4"
+									/>
+									{#if u.isSurgeon}
+										<select
+											value={u.specialty ?? 'GENERAL'}
+											onchange={(e) =>
+												changeSpecialty(
+													u,
+													(e.currentTarget as HTMLSelectElement).value as AdminUserSpecialty
+												)}
+											disabled={isPending}
+											class="h-8 rounded-md border border-input bg-background px-2 text-xs"
+										>
+											{#each SPECIALTIES as s (s)}
+												<option value={s}>{s.toLowerCase()}</option>
+											{/each}
+										</select>
+									{/if}
+								</label>
+							</td>
+							<td class="px-3 py-2">
+								<span
+									class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] tracking-wide uppercase {statusBadge(
+										u.status
+									)}"
+								>
+									{u.status.toLowerCase()}
+								</span>
+							</td>
+							<td class="px-3 py-2 text-right">
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={() => toggleStatus(u)}
+									disabled={isPending}
+								>
+									{u.status === 'ACTIVE' ? 'Disable' : 'Re-enable'}
+								</Button>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+
+		<footer class="flex items-center justify-between text-sm">
+			<p class="text-muted-foreground">
+				Showing {page.items.length} of {page.total}
+			</p>
+			<div class="flex items-center gap-2">
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={() => {
+						pageIndex = Math.max(0, pageIndex - 1);
+						void refresh();
+					}}
+					disabled={isFirstPage || loading}
+				>
+					← Prev
+				</Button>
+				<span class="text-xs text-muted-foreground">
+					Page {pageIndex + 1} of {totalPages}
+				</span>
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={() => {
+						pageIndex += 1;
+						void refresh();
+					}}
+					disabled={isLastPage || loading}
+				>
+					Next →
+				</Button>
+			</div>
+		</footer>
+	{/if}
+</div>
