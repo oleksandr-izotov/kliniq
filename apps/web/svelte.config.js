@@ -27,7 +27,17 @@ const config = {
 				'default-src': ['self'],
 				'img-src': ['self', 'data:'],
 				'font-src': ['self', 'data:'],
-				'script-src': ['self'],
+				// `mode-watcher`'s <ModeWatcher /> component injects an
+				// inline <script> into the document head to read the
+				// stored theme preference and set the `dark`/`light` class
+				// before paint (avoids FOUC). SvelteKit's CSP hash
+				// collector doesn't see that script because mode-watcher
+				// uses {@html} for the injection, so we allowlist its
+				// hash explicitly. If a CSP violation appears again with
+				// a new sha256 in DevTools, mode-watcher's script body
+				// changed (version bump or internal refactor) — copy the
+				// new hash from the violation error message and replace.
+				'script-src': ['self', "'sha256-Cr3r+iKjDTUxJaxM3r/Iq0ow6clOB9AqoT6j0wMFMIM='"],
 				'style-src': ['self', 'unsafe-inline'],
 				'connect-src': [
 					'self',
