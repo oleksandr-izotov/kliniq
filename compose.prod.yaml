@@ -208,37 +208,24 @@ configs:
     content: |
       {$$PRIMARY_DOMAIN} {
         # Security headers applied to every response served through Caddy.
-        # CSP is set here (not in Spring Security or SvelteKit) because
-        # Caddy is the single ingress and the browser only applies CSP to
-        # document responses anyway — putting it on api JSON responses
-        # would just add bytes the browser ignores.
         #
-        # CSP directives:
-        #   default-src 'self'           - block any origin we don't list
-        #   img-src 'self' data:         - inline base64 images (avatars)
-        #   font-src 'self' data:        - Tailwind/shadcn icon fonts
-        #   script-src 'self'            - no inline JS (SvelteKit emits
-        #                                  external chunks only)
-        #   style-src 'self' 'unsafe-inline' - shadcn-svelte injects per-
-        #                                     component <style> blocks at
-        #                                     runtime; until we move to
-        #                                     nonces (Sprint 6) this stays
-        #   connect-src 'self'           - fetch() only to same origin;
-        #                                  Sentry SDK posts events from
-        #                                  *.sentry.io so widen for it
-        #   frame-ancestors 'none'       - never iframable; defeats
-        #                                  clickjacking outright
-        #   base-uri 'self'              - block <base href="..."> injection
-        #   form-action 'self'           - no cross-origin form posts
+        # CSP itself lives in apps/web/svelte.config.js (kit.csp) — Caddy
+        # doesn't set Content-Security-Policy here because SvelteKit's
+        # SSR injects inline scripts (hydration data, theme detection)
+        # that need hash/nonce allowlisting which only the framework
+        # can compute at render time. SvelteKit emits a <meta http-
+        # equiv="content-security-policy"> per page; a Caddy-level CSP
+        # would intersect with that (most-restrictive wins) and undo
+        # the hash, blocking hydration. See Sprint 5 Day 55 retro.
         #
-        # X-Content-Type-Options stops MIME sniffing in old browsers.
-        # Referrer-Policy keeps URL paths off third-party telemetry.
-        # Permissions-Policy explicitly denies sensors we never use.
-        # HSTS only on real prod (not local :80) — `max-age=31536000`
-        # tells browsers to remember "HTTPS only" for a year; preload-list
-        # entry is a Sprint 6 nice-to-have.
+        # The remaining four headers don't vary per page, so Caddy is
+        # the cleanest layer for them:
+        #   X-Content-Type-Options stops MIME sniffing in old browsers.
+        #   Referrer-Policy keeps URL paths off third-party telemetry.
+        #   Permissions-Policy explicitly denies sensors we never use.
+        #   HSTS tells browsers "HTTPS only for a year"; preload-list
+        #     entry is a Sprint 6 nice-to-have.
         header {
-          Content-Security-Policy "default-src 'self'; img-src 'self' data:; font-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.sentry.io https://*.ingest.sentry.io https://*.ingest.de.sentry.io; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
           X-Content-Type-Options "nosniff"
           Referrer-Policy "strict-origin-when-cross-origin"
           Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"

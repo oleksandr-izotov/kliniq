@@ -246,23 +246,29 @@ docker ps --format 'table {{.Names}}\t{{.Status}}'   # caddy-… should be Up
 
 If `coolify-proxy` re-appeared, the Coolify UI toggle didn't stick — escalate via Coolify GitHub issues or pin `coolify-proxy`'s restart policy manually: `docker update --restart=no coolify-proxy && docker stop coolify-proxy`.
 
-## Security headers (Caddy)
+## Security headers
 
-CSP and the rest of the standard security-header set are configured inline in `compose.prod.yaml`'s `configs.caddyfile.content` block under the `header { ... }` directive. They apply to every response Caddy returns regardless of upstream (api or web).
+CSP is configured in `apps/web/svelte.config.js` (`kit.csp` block). SvelteKit's adapter-node SSRs everything, and it injects inline scripts for hydration and theme-detection that need to be hash- or nonce-signed — that allowlisting only the framework can compute, so CSP must live at the framework layer. SvelteKit emits a `<meta http-equiv="content-security-policy">` tag per rendered page. **Do not also set `Content-Security-Policy` in Caddy** — the browser intersects header CSP with meta CSP using most-restrictive wins, which would invalidate the SvelteKit-computed hashes and break hydration.
+
+The remaining four security headers live in `compose.prod.yaml`'s `configs.caddyfile.content` block under `header { ... }`: `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security`. Plus `-Server` to strip Caddy's default `Server: Caddy` identifier.
 
 **To verify in production:**
 
 ```bash
-curl -sI https://kliniq.izotov.dev | grep -iE '(content-security|x-content|referrer|permissions|strict-transport)'
+# The four Caddy-level headers come back on every response:
+curl -sI https://kliniq.izotov.dev | grep -iE '(x-content|referrer|permissions|strict-transport)'
+
+# CSP is on the rendered HTML, not the headers — look inside the page:
+curl -s https://kliniq.izotov.dev/login | grep -o 'content-security-policy[^>]*'
 ```
 
-Should print five headers: `Content-Security-Policy`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security`.
+The CSP `<meta>` line should contain `default-src 'self'`, `script-src 'self' 'sha256-…'` (one or more hashes), `style-src 'self' 'unsafe-inline'`, `connect-src 'self' https://*.sentry.io https://*.ingest.sentry.io https://*.ingest.de.sentry.io`, `frame-ancestors 'none'`, etc.
 
 **If a SPA route breaks with CSP errors** (DevTools → Console → `Refused to load ... because it violates the following Content Security Policy directive`):
 
 1. Identify which directive blocked it (the error names the specific directive).
-2. Either fix the code to stop loading the offending resource, OR — if the resource is load-bearing third-party — add the origin to the matching directive in `compose.prod.yaml`. Connect-src already widens for Sentry's ingest endpoints; add the same way for any new third party.
-3. Redeploy via Coolify. Don't loosen to `'unsafe-inline'` / `'unsafe-eval'` unless absolutely necessary; those defeat the point of CSP.
+2. Either fix the code to stop loading the offending resource, OR — if the resource is load-bearing third-party — add the origin to the matching directive's list in `apps/web/svelte.config.js`. Connect-src already widens for Sentry's ingest endpoints; add the same way for any new third party.
+3. Local build + redeploy via Coolify. Don't loosen to `'unsafe-inline'` / `'unsafe-eval'` unless absolutely necessary; those defeat the point of CSP. SvelteKit's hash/nonce mechanism handles its own inline scripts automatically — don't allowlist `unsafe-inline` for script-src to "fix" the framework's own inline scripts.
 
 ## Sentry
 
