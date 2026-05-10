@@ -104,15 +104,19 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-kliniq_local_prod_test}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      # SMTP — Mailpit fallback for local prod-image testing, overridden
-      # in Coolify with Resend's SMTP credentials in real prod. The five
-      # SPRING_MAIL_* vars + the SSL property cover both auth and TLS.
+      # SMTP defaults to the in-compose Mailpit container. Even when prod
+      # routes mail through ResendApiEmailSender (HTTPS), Spring Boot's
+      # MailHealthIndicator still pings the configured SMTP host on /actuator,
+      # so leaving SPRING_MAIL_HOST pointed at the internal Mailpit keeps
+      # the health check responsive.
       SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-mailpit}
       SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-1025}
-      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
-      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
-      SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE:-false}
-      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:-false}
+      # Mail provider toggle: `smtp` (default) wires SmtpEmailSender →
+      # JavaMailSender; `resend` wires ResendApiEmailSender → HTTPS POST
+      # to api.resend.com (used in prod because Hetzner blocks outbound
+      # SMTP for fresh cloud accounts).
+      APP_MAIL_PROVIDER: ${APP_MAIL_PROVIDER:-smtp}
+      APP_MAIL_RESEND_API_KEY: ${APP_MAIL_RESEND_API_KEY:-}
       APP_WEB_BASE_URL: ${APP_WEB_BASE_URL:-http://localhost}
       APP_MAIL_FROM: ${APP_MAIL_FROM:-no-reply@kliniq.local}
     networks:

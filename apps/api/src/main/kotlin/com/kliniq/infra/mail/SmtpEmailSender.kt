@@ -2,18 +2,24 @@ package com.kliniq.infra.mail
 
 import jakarta.mail.internet.MimeMessage
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.mail.javamail.JavaMailSender
 import org.springframework.mail.javamail.MimeMessageHelper
 import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
 
 /**
- * Sends mail through Spring's [JavaMailSender]. In dev that's pointed at
- * Mailpit (localhost:1025) so messages stay in the UI at :8025 instead of
- * leaving the developer's machine. Templates are inline strings — Sprint 1
- * keeps it light; richer templating (Thymeleaf, MJML) lands in V2.
+ * Sends mail through Spring's [JavaMailSender]. Used in dev where it's
+ * pointed at Mailpit (localhost:1025) so messages stay in the UI at
+ * :8025 instead of leaving the developer's machine. In prod we use
+ * [ResendApiEmailSender] over HTTPS instead — Hetzner blocks outbound
+ * SMTP ports by default for new cloud accounts.
+ *
+ * The `matchIfMissing = true` keeps Mailpit-on-SMTP as the default when
+ * `app.mail.provider` is unset, which matches local dev / CI behaviour.
  */
 @Component
+@ConditionalOnProperty(name = ["app.mail.provider"], havingValue = "smtp", matchIfMissing = true)
 class SmtpEmailSender(
     private val mail: JavaMailSender,
     @Value("\${app.mail.from}") private val from: String,
@@ -28,8 +34,11 @@ class SmtpEmailSender(
                 MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name()).apply {
                     setFrom(from)
                     setTo(to)
-                    setSubject("Verify your Kliniq account")
-                    setText(plainTextVerify(displayName, verifyUrl), htmlVerify(displayName, verifyUrl))
+                    setSubject(MailTemplates.VERIFY_SUBJECT)
+                    setText(
+                        MailTemplates.verifyText(displayName, verifyUrl),
+                        MailTemplates.verifyHtml(displayName, verifyUrl),
+                    )
                 }
             }
         mail.send(msg)
@@ -45,8 +54,11 @@ class SmtpEmailSender(
                 MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name()).apply {
                     setFrom(from)
                     setTo(to)
-                    setSubject("Reset your Kliniq password")
-                    setText(plainTextReset(displayName, resetUrl), htmlReset(displayName, resetUrl))
+                    setSubject(MailTemplates.RESET_SUBJECT)
+                    setText(
+                        MailTemplates.resetText(displayName, resetUrl),
+                        MailTemplates.resetHtml(displayName, resetUrl),
+                    )
                 }
             }
         mail.send(msg)
@@ -62,95 +74,13 @@ class SmtpEmailSender(
                 MimeMessageHelper(mime, true, StandardCharsets.UTF_8.name()).apply {
                     setFrom(from)
                     setTo(to)
-                    setSubject("You're invited to Kliniq")
+                    setSubject(MailTemplates.INVITATION_SUBJECT)
                     setText(
-                        plainTextInvitation(roleLabel, acceptUrl),
-                        htmlInvitation(roleLabel, acceptUrl),
+                        MailTemplates.invitationText(roleLabel, acceptUrl),
+                        MailTemplates.invitationHtml(roleLabel, acceptUrl),
                     )
                 }
             }
         mail.send(msg)
     }
-
-    private fun plainTextInvitation(
-        roleLabel: String,
-        url: String,
-    ) = """
-        Hi,
-
-        An admin has invited you to join Kliniq as a $roleLabel.
-        To accept and pick a password, visit:
-        $url
-
-        This link expires in 7 days. If you weren't expecting this invitation,
-        ignore this email — no account is created until you click the link.
-
-        — Kliniq
-        """.trimIndent()
-
-    private fun htmlInvitation(
-        roleLabel: String,
-        url: String,
-    ) = """
-        <p>Hi,</p>
-        <p>An admin has invited you to join Kliniq as a <strong>$roleLabel</strong>.</p>
-        <p><a href="$url" style="background:#10b981;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;">Accept invitation</a></p>
-        <p>Or paste this link into your browser: <br><a href="$url">$url</a></p>
-        <p style="color:#64748b;font-size:13px;">This link expires in 7 days. If you weren't expecting this invitation, ignore this email — no account is created until you click the link.</p>
-        <p style="color:#64748b;font-size:13px;">— Kliniq</p>
-        """.trimIndent()
-
-    private fun plainTextVerify(
-        name: String,
-        url: String,
-    ) = """
-        Hi $name,
-
-        Welcome to Kliniq. Please verify your email by visiting:
-        $url
-
-        This link expires in 24 hours. If you didn't sign up, ignore this email.
-
-        — Kliniq
-        """.trimIndent()
-
-    private fun htmlVerify(
-        name: String,
-        url: String,
-    ) = """
-        <p>Hi $name,</p>
-        <p>Welcome to Kliniq. Please verify your email by clicking the button below:</p>
-        <p><a href="$url" style="background:#10b981;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;">Verify email</a></p>
-        <p>Or paste this link into your browser: <br><a href="$url">$url</a></p>
-        <p style="color:#64748b;font-size:13px;">This link expires in 24 hours. If you didn't sign up, ignore this email.</p>
-        <p style="color:#64748b;font-size:13px;">— Kliniq</p>
-        """.trimIndent()
-
-    private fun plainTextReset(
-        name: String,
-        url: String,
-    ) = """
-        Hi $name,
-
-        Someone (hopefully you) requested a password reset for your Kliniq account.
-        To set a new password, visit:
-        $url
-
-        This link expires in 15 minutes. If you didn't ask for this, ignore the email
-        — your password stays unchanged.
-
-        — Kliniq
-        """.trimIndent()
-
-    private fun htmlReset(
-        name: String,
-        url: String,
-    ) = """
-        <p>Hi $name,</p>
-        <p>Someone (hopefully you) requested a password reset for your Kliniq account.</p>
-        <p><a href="$url" style="background:#10b981;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;">Reset password</a></p>
-        <p>Or paste this link into your browser: <br><a href="$url">$url</a></p>
-        <p style="color:#64748b;font-size:13px;">This link expires in 15 minutes. If you didn't ask for this, ignore the email — your password stays unchanged.</p>
-        <p style="color:#64748b;font-size:13px;">— Kliniq</p>
-        """.trimIndent()
 }
