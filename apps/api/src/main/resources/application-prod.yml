@@ -70,3 +70,22 @@ logging:
     root: INFO
     org.springframework.web: WARN
     org.flywaydb: INFO
+
+# Sentry error tracking. SENTRY_DSN is set in Coolify env vars; when unset
+# (e.g. a local prod-profile run) the SDK no-ops on init and the app boots
+# silently. send-default-pii left at the safe default — Spring Security
+# principal email won't be attached automatically; we'd opt in explicitly
+# if we ever wanted user-scoped error grouping.
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: prod
+  release: ${SENTRY_RELEASE:}
+  send-default-pii: false
+  attach-stacktrace: true
+  # No performance tracing yet — error capture only. Bump to 0.1 (10 %)
+  # once we want span data for a specific endpoint hot path.
+  traces-sample-rate: 0.0
+  logging:
+    enabled: true
+    minimum-event-level: error
+    minimum-breadcrumb-level: info

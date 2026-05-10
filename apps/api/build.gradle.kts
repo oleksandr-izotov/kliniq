@@ -81,6 +81,17 @@ dependencies {
     // any aggregator that consumes structured stdout.
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
 
+    // Sentry error tracking. The -jakarta starter wires itself into Spring
+    // Boot 3.x auto-configuration (DSN, environment, release pulled from
+    // application-prod.yml + env vars). The logback appender forwards ERROR
+    // log statements as Sentry events so we cover logger.error sites that
+    // never bubble to a global exception handler.
+    //
+    // No DSN set in non-prod profiles → SDK no-ops on init (documented
+    // behavior) so local dev + tests don't ship phantom events.
+    implementation("io.sentry:sentry-spring-boot-starter-jakarta:7.20.1")
+    implementation("io.sentry:sentry-logback:7.20.1")
+
     // DevTools restarts the running app when build/classes/ changes.
     // Pair with `./gradlew --continuous build` in another terminal (or
     // IntelliJ's auto-build) for hot Kotlin reload — `pnpm dev:all`

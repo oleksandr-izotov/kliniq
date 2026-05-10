@@ -9,7 +9,7 @@ Two reasons to bundle: (1) infrastructure-only leaves the product feeling sparse
 Reliability / hardening:
 
 - [ ] Daily `pg_dump` cron on the Hetzner box; retention keeps the last 14 days locally
-- [ ] Offsite backup to Backblaze B2 via Restic; one manual restore-test confirms the dump round-trips through B2 back into a working Postgres
+- [ ] ~~Offsite backup to Backblaze B2 via Restic; one manual restore-test confirms the dump round-trips through B2 back into a working Postgres~~ — **deferred:** Day 52 punted out of V1.1 on 2026-05-09. Rationale: no paying clinic on the box means the only data at risk is the demo deploy's own dummy bookings; local 14-day retention is enough to cover that. Picks up again the day we onboard a real tenant.
 - [ ] Sentry hookup on both api (Spring Boot) and web (SvelteKit); error events flow to one project with `environment=prod` tag; source maps attached on the web side
 - [ ] UptimeRobot (or equivalent) pinging `/actuator/health/liveness` every 5 minutes; email alert verified by stopping the web container briefly
 - [ ] SSH hardening: `PasswordAuthentication no` in `/etc/ssh/sshd_config`, key-only login; fail2ban jail config verified
@@ -34,7 +34,7 @@ UX polish:
 
 ## Decisions locked (no debate this sprint)
 
-- **Backup target: Backblaze B2.** $0.005/GB/month storage vs S3's $0.023 — for ~1 GB of compressed pg_dumps over 12 months we're talking under $1/year. Restic on top gives encrypted de-duped snapshots and `restic restore` for any point in the retention window. Wasabi / Cloudflare R2 are alternates if B2 ever breaks; not worth thinking about now.
+- **Backup target: Backblaze B2.** $0.005/GB/month storage vs S3's $0.023 — for ~1 GB of compressed pg_dumps over 12 months we're talking under $1/year. Restic on top gives encrypted de-duped snapshots and `restic restore` for any point in the retention window. Wasabi / Cloudflare R2 are alternates if B2 ever breaks; not worth thinking about now. **Deferred from Sprint 5 on 2026-05-09** — picks up the day we onboard a paying tenant.
 - **Sentry plan:** free tier (5k events/month, 7-day retention). Plenty for V1.1 traffic. Upgrade only when we actually hit the limit.
 - **Uptime monitoring: UptimeRobot free tier.** 50 monitors, 5-minute interval. Single liveness probe covers us. Better-Uptime / StatusGator are nicer UIs but cost money we don't need to spend yet.
 - **CSP shape:** start with a permissive-but-mostly-locked-down policy — `frame-ancestors 'none'`, `img-src 'self' data:`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'` (shadcn-svelte runtime needs inline styles). Strict-dynamic + per-request nonces is a Sprint 6 nice-to-have; the looser policy still defeats every classic XSS vector.
@@ -73,13 +73,18 @@ If anything on this list looks tempting mid-sprint, write it on a TODO and move 
 - [ ] One-time restore-test: load the latest dump into a sidecar Postgres container, `SELECT count(*) FROM users / bookings / operating_rooms`, verify counts match prod.
 - [ ] Document the runbook in `docs/RUNBOOK.md` (new file) — exact commands for backup / restore / list.
 
-### Day 52 — Offsite backups: Restic + Backblaze B2
-- [ ] Backblaze B2 account; bucket `kliniq-prod-backups`; app key with write-only scope to that bucket.
-- [ ] `apt install restic` on the host.
-- [ ] `/opt/kliniq/backup-restic.sh` wraps `restic backup /opt/kliniq/backups/` — encrypted with a passphrase stored in the user's password manager.
-- [ ] Cron at 04:00 UTC (after pg_dump completes).
-- [ ] Retention: `restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune`.
-- [ ] Manual restore-test: `restic restore latest --target /tmp/restore`, verify `.sql.gz` files match the local dumps byte-for-byte.
+### Day 52 — Offsite backups: Restic + Backblaze B2 — **DEFERRED**
+
+Punted out of Sprint 5 on 2026-05-09. The only data on the box is the demo deploy's own dummy bookings; local 14-day pg_dump retention from Day 51 is sufficient until a real tenant exists. Picks up again the day we onboard a paying clinic — at which point the full scope below applies as written.
+
+- [ ] ~~Backblaze B2 account; bucket `kliniq-prod-backups`; app key with write-only scope to that bucket.~~
+- [ ] ~~`apt install restic` on the host.~~
+- [ ] ~~`/opt/kliniq/backup-restic.sh` wraps `restic backup /opt/kliniq/backups/` — encrypted with a passphrase stored in the user's password manager.~~
+- [ ] ~~Cron at 04:00 UTC (after pg_dump completes).~~
+- [ ] ~~Retention: `restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune`.~~
+- [ ] ~~Manual restore-test: `restic restore latest --target /tmp/restore`, verify `.sql.gz` files match the local dumps byte-for-byte.~~
+
+→ Day 53 starts immediately after Day 51 in the actual execution timeline.
 
 ### Day 53 — Sentry hookup (api)
 - [ ] Add `io.sentry:sentry-spring-boot-starter-jakarta` to `apps/api/build.gradle.kts`.
@@ -144,7 +149,7 @@ If anything on this list looks tempting mid-sprint, write it on a TODO and move 
 
 ## Sprint 5 sanity checklist
 
-- [ ] **Backups round-trip** — full pg_dump → Backblaze B2 → restore-test verified at least once; counts match.
+- [ ] **Backups round-trip** — local pg_dump → sidecar restore-test verified; counts match. (Offsite B2 leg deferred — see Day 52.)
 - [ ] **Sentry events flow** — api crash + web crash both visible in the Sentry dashboard within 1 minute of being thrown.
 - [ ] **UptimeRobot pings** — green ticks every 5 minutes; alert email tested by stopping a container briefly.
 - [ ] **SSH key-only** — password auth disabled, key auth verified across one reboot.

@@ -102,7 +102,7 @@ The dump's `--clean --if-exists` flags handle existing tables — they're droppe
 
 ### Offsite backups
 
-_Pending Sprint 5 Day 52 — Restic + Backblaze B2._
+_Deferred (2026-05-09) — picks up the day a paying tenant is onboarded. The plan when we revisit: Restic snapshots of `/opt/kliniq/backups/` pushed to Backblaze B2 at 04:00 UTC, retention `--keep-daily 7 --keep-weekly 4 --keep-monthly 12`, passphrase in the user's password manager. Until then the only data on the box is demo-deploy noise; the local 14-day rotation above is enough._
 
 ## Container operations
 
@@ -165,6 +165,36 @@ docker pull ghcr.io/oleksandr-izotov/kliniq-api:latest
 ```
 
 Then click Deploy in Coolify.
+
+## Sentry
+
+Errors land at `https://sentry.io` → org `kliniq` → project `kliniq-api` (free hosted tier, 5k events / 7-day retention).
+
+**DSN:** stored in Coolify env var `SENTRY_DSN`. Format: `https://<public>@oXXXX.ingest.sentry.io/<project>`.
+
+**Release tag** (optional): set `SENTRY_RELEASE` to the deployed Git SHA so the dashboard groups errors by build. Coolify doesn't pass the SHA automatically; leave unset if you don't care.
+
+**What's captured automatically:**
+
+- Anything throwing past `GlobalExceptionHandler.onUnexpected` → `log.error("Unhandled exception in controller", e)` → Sentry's logback appender forwards it.
+- Any `logger.error(…)` site anywhere in the codebase (minimum-event-level = error in `application-prod.yml`).
+- INFO+ log statements ride along as breadcrumbs on each event.
+
+**What's NOT captured:**
+
+- 4xx responses produced by `GlobalExceptionHandler.onValidation` / `onMalformedBody` — those are client mistakes, not server errors.
+- Anything logged at WARN or below.
+- PII: `send-default-pii=false` keeps user emails / IPs off events. Flip only if you actually need user-scoped grouping.
+
+**Verifying the pipeline (one-time after first deploy):**
+
+1. In Coolify env vars: set `APP_SENTRY_SMOKE_ENABLED=true` alongside `SENTRY_DSN`. Redeploy.
+2. From a logged-in admin browser session: `GET https://kliniq.izotov.dev/api/v1/dev/sentry-smoke`.
+3. Server returns 500 with the standard `INTERNAL_ERROR` envelope.
+4. In Sentry dashboard: event appears within ~60 s, tagged `environment=prod`, with full stack trace.
+5. Remove `APP_SENTRY_SMOKE_ENABLED` from Coolify env (or delete `SentrySmokeController.kt`) and redeploy. The route 404s when the flag is off.
+
+**Day-to-day:** Sentry dashboard sends an email on the first occurrence of a new error fingerprint. Reply to that thread when you've fixed it — Sentry keeps the resolved state and reopens the issue if the same fingerprint fires post-fix.
 
 ## Promoting a user to ADMIN
 
