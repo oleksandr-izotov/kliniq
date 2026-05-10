@@ -121,6 +121,13 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      # SvelteKit's hooks.server.ts hits /api/v1/auth/me on every request
+      # to populate locals.user. The default fallback inside the codebase
+      # is the dev cert host (https://localhost:8443) — useless inside a
+      # docker container. Point it at the api service over the private
+      # compose network. Plain HTTP is fine here: traffic never leaves
+      # the host bridge, TLS terminates at Caddy on the public edge.
+      BACKEND_URL: http://api:8080
     networks:
       - kliniq-prod-net
 
