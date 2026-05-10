@@ -82,7 +82,14 @@ ENV HOST=0.0.0.0
 
 # wget is in base node:22-alpine via busybox; the /healthz route lands
 # on a SvelteKit endpoint that just returns 200.
+#
+# Explicit `127.0.0.1` rather than `localhost`: Alpine resolves
+# `localhost` to both 127.0.0.1 (IPv4) and ::1 (IPv6); BusyBox wget
+# tries IPv6 first and doesn't fall back. The Node server binds to
+# `0.0.0.0:3000` (IPv4 wildcard only), so the ::1 connection is
+# refused and the healthcheck flakes red even though /healthz works
+# fine. Pinning to 127.0.0.1 sidesteps the resolver entirely.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD wget -q --spider http://localhost:3000/healthz || exit 1
+    CMD wget -q --spider http://127.0.0.1:3000/healthz || exit 1
 
 CMD ["node", "build"]
