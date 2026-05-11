@@ -7,15 +7,82 @@
 [![SvelteKit](https://img.shields.io/badge/sveltekit-2-FF3E00.svg?logo=svelte&logoColor=white)](https://svelte.dev)
 [![Tailwind v4](https://img.shields.io/badge/tailwind-v4-06B6D4.svg?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 
-Operating room scheduling platform for medical clinics. Single-tenant SaaS that helps clinic staff manage operating rooms, surgeons, and bookings; later extends to a customer portal where surgeons can self-book available slots.
+> Single-tenant operating-room scheduling SaaS for medical clinics. Clinic staff manage operating rooms, surgeons, and bookings on a shared schedule; the database refuses double-booked rooms at the row level (Postgres `EXCLUDE USING gist`), and the realtime backplane broadcasts every change to every open browser tab.
 
-**Status:** Sprint 1 done — auth (password + passkey + reset + change-password), CSRF, rate limit + exponential backoff, HIBP breach checks, audit log. Sprint 2 (booking core) in progress.
+## Live demo
+
+**→ <https://kliniq.izotov.dev>** — V1.1, [tagged `v1.0.0`](https://github.com/oleksandr-izotov/kliniq/releases/tag/v1.0.0) and shipped 2026-05-09 to a Hetzner CPX22 + Coolify + Caddy stack.
+
+Sign in with any of the demo surgeon accounts:
+
+| Email | Password | Role |
+| --- | --- | --- |
+| `drsmith@kliniq-demo.local` | `DemoSurgeon2026!` | Manager · Cardiology |
+| `drpatel@kliniq-demo.local` | `DemoSurgeon2026!` | Manager · Orthopedics |
+| `drfischer@kliniq-demo.local` | `DemoSurgeon2026!` | Manager · Neurosurgery |
+| `drkuznetsova@kliniq-demo.local` | `DemoSurgeon2026!` | Manager · General |
+
+The schedule is pre-seeded with 3 operating rooms and ~10 bookings spread across the next two weeks. The seed is opt-in via the `APP_DEMO_SEED=true` env var so a real clinical deploy never receives it — see [`DemoDataSeeder.kt`](apps/api/src/main/kotlin/com/kliniq/infra/demo/DemoDataSeeder.kt).
+
+**Status:** V1.1 — Sprint 5 (backups, Sentry, UptimeRobot, SSH/CSP hardening, demo data, onboarding wizard, README polish) in flight.
 **Author:** Oleksandr Izotov ([@oleksandr-izotov](https://github.com/oleksandr-izotov))
 **License:** MIT
 
 ---
 
-## Quick start
+## Architecture (prod)
+
+```mermaid
+flowchart LR
+    Browser([Browser])
+    subgraph Hetzner["Hetzner CPX22 · Coolify"]
+        Caddy["Caddy 2<br/>edge TLS · headers · gzip"]
+        Web["SvelteKit web<br/>node 22 · adapter-node"]
+        API["Spring Boot api<br/>JDK 21"]
+        Postgres[("Postgres 16<br/>EXCLUDE gist<br/>+ Flyway")]
+        Redis[("Redis 7.4<br/>sessions + pub-sub")]
+        Mailpit["Mailpit<br/>SMTP health fallback"]
+    end
+    Resend["Resend HTTPS API<br/>transactional email"]
+    Sentry["Sentry SaaS<br/>api + web errors"]
+    UptimeRobot["UptimeRobot<br/>5-min liveness probe"]
+    GHA["GitHub Actions"]
+    GHCR["GHCR<br/>kliniq-api:latest"]
+
+    Browser -->|HTTPS · LE cert| Caddy
+    Caddy -->|"/api · /actuator · /v3/api-docs · /swagger-ui"| API
+    Caddy -->|else| Web
+    Web -->|SSR /me probe| API
+    API --> Postgres
+    API --> Redis
+    API -->|HTTPS POST| Resend
+    API -->|errors via logback| Sentry
+    Web -->|errors via @sentry/sveltekit| Sentry
+    UptimeRobot -.->|"/actuator/health/liveness"| Caddy
+    GHA -->|push :latest on main| GHCR
+    GHCR -.->|docker pull on deploy| API
+```
+
+The api image is built by GitHub Actions (it needs a live Postgres at compile time for jOOQ codegen — that's the `api-image` job's service container). The web image is built on the Hetzner host during a Coolify deploy because adapter-node's output is small enough that build-once-on-the-edge is fine and avoids a second CI artifact pipeline.
+
+Caddy is the single ingress and handles auto-TLS via Let's Encrypt TLS-ALPN-01. The four non-CSP security headers (`X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security`) live in the Caddyfile inside [`compose.prod.yaml`](compose.prod.yaml); CSP itself is emitted per page by SvelteKit ([`apps/web/svelte.config.js`](apps/web/svelte.config.js) `kit.csp`) because the framework needs to hash its own inline hydration scripts. The full [`docs/RUNBOOK.md`](docs/RUNBOOK.md) covers SSH access, backups, incident triage, and the env-var inventory.
+
+## Engineering deep dive
+
+Things in this codebase worth reading if you're looking at it as a hiring sample:
+
+- **No two active bookings overlap on the same OR — enforced at the row level.** [`V3__booking_core.sql`](apps/api/src/main/resources/db/migration/V3__booking_core.sql) sets up an `EXCLUDE USING gist (operating_room_id WITH =, tstzrange(starts_at, ends_at, '[)') WITH &&)` predicate gated on `status IN ('SCHEDULED','IN_PROGRESS')`, which closes the TOCTOU window two "is the slot free?" requests could otherwise drive through.
+- **Booking lifecycle is a real FSM, not a free-form status field.** [`Booking.kt:80`](apps/api/src/main/kotlin/com/kliniq/domain/booking/Booking.kt) defines the `SCHEDULED → IN_PROGRESS → COMPLETED` plus `→ CANCELLED` transitions and [`JooqBookingRepository.transitionStatus`](apps/api/src/main/kotlin/com/kliniq/persistence/booking/JooqBookingRepository.kt) does a compare-and-set against the expected current status so concurrent transitions can't both win.
+- **Realtime updates fire only after the booking commits.** [`BookingPublishAfterCommitTest.kt`](apps/api/src/test/kotlin/com/kliniq/infra/realtime/BookingPublishAfterCommitTest.kt) asserts that a Redis pub-sub message lands only after the surrounding DB transaction commits, so other browser tabs never receive a "new booking" event that ends up being rolled back. [`BookingPubSubTwoInstancesTest.kt`](apps/api/src/test/kotlin/com/kliniq/infra/realtime/BookingPubSubTwoInstancesTest.kt) extends that to a two-instance setup proving the channel works across JVMs.
+- **Auth surface has 60+ integration tests against real Postgres and Redis containers** via Testcontainers + `@ServiceConnection`. JaCoCo line coverage on `com.kliniq.usecase.auth` is ~89%.
+- **Email senders are bean-swappable via `@ConditionalOnProperty`.** [`SmtpEmailSender`](apps/api/src/main/kotlin/com/kliniq/infra/mail/SmtpEmailSender.kt) wires when `app.mail.provider=smtp` (local dev with Mailpit); [`ResendApiEmailSender`](apps/api/src/main/kotlin/com/kliniq/infra/mail/ResendApiEmailSender.kt) wires when `app.mail.provider=resend` (prod). Hetzner blocks outbound SMTP on fresh cloud accounts so prod talks to Resend over HTTPS instead.
+- **CSP via SvelteKit, not Caddy.** SvelteKit emits a `<meta http-equiv="content-security-policy">` per page with sha256 hashes of its own inline hydration scripts; the corresponding Caddy `Content-Security-Policy` header is deliberately absent so the browser doesn't intersect-down to a policy that invalidates those hashes. See [`apps/web/svelte.config.js`](apps/web/svelte.config.js) and the "Security headers" section in [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+- **CI → GHCR → Coolify pipeline.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — `api-image` job spins up a Postgres service container, builds the bootJar (running Flyway + jOOQ codegen against it), and pushes the runtime image to GHCR on every merge to main. The Hetzner box's `docker pull` + Coolify Deploy round-trips the image in.
+- **Error tracking lands at Sentry from both sides.** api uses [`sentry-spring-boot-starter-jakarta`](apps/api/build.gradle.kts) with a logback appender — anything calling `logger.error(..., throwable)` becomes a Sentry event, no per-call instrumentation. web uses [`@sentry/sveltekit`](apps/web/svelte.config.js) wired in [`hooks.client.ts`](apps/web/src/hooks.client.ts) + [`hooks.server.ts`](apps/web/src/hooks.server.ts); source maps upload to Sentry at Docker build time so dashboard stack traces resolve to real `.svelte` / `.ts` files.
+
+ADRs explaining the bigger decisions live in [`docs/DECISIONS.md`](docs/DECISIONS.md).
+
+## Quick start (local)
 
 Prereqs (Windows / macOS / Linux):
 
@@ -41,11 +108,7 @@ pnpm install
 pnpm dev:all
 ```
 
-`pnpm dev:all` brings up the docker stack, waits for postgres / redis / mailpit
-to be ready, then runs `gradle bootRun` (the Spring app), `gradle --continuous build`
-(re-compiles on save so Spring DevTools can hot-restart), and `vite dev` together
-under [`concurrently`](https://www.npmjs.com/package/concurrently). One Ctrl-C
-tears everything down.
+`pnpm dev:all` brings up the docker stack, waits for postgres / redis / mailpit to be ready, then runs `gradle bootRun` (the Spring app), `gradle --continuous build` (re-compiles on save so Spring DevTools can hot-restart), and `vite dev` together under [`concurrently`](https://www.npmjs.com/package/concurrently). One Ctrl-C tears everything down.
 
 Then visit:
 
@@ -56,13 +119,11 @@ Then visit:
 
 If port 5432 is in use by a native postgres, our compose maps host port **55432** instead — config already accounts for this.
 
-If you'd rather run pieces by hand: `pnpm infra:up`, `pnpm dev:api`, `pnpm dev:web`,
-`pnpm infra:down`. See `package.json` for the full script list.
+If you'd rather run pieces by hand: `pnpm infra:up`, `pnpm dev:api`, `pnpm dev:web`, `pnpm infra:down`. See `package.json` for the full script list.
 
 ### Regenerating the SPA's API types
 
-The frontend's wire types live in [`apps/web/src/lib/api/generated.ts`](apps/web/src/lib/api/generated.ts),
-produced from the backend's OpenAPI spec. Whenever a controller or DTO changes:
+The frontend's wire types live in [`apps/web/src/lib/api/generated.ts`](apps/web/src/lib/api/generated.ts), produced from the backend's OpenAPI spec. Whenever a controller or DTO changes:
 
 ```bash
 # Backend must be running at https://localhost:8443
@@ -70,23 +131,42 @@ cd apps/web
 pnpm gen:api
 ```
 
-`generated.ts` is committed to git so the SPA builds without a live
-backend; CI catches drift via `svelte-check`.
+`generated.ts` is committed to git so the SPA builds without a live backend; CI catches drift via `svelte-check`.
 
----
+## Deploy your own
+
+See [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for the full Hetzner + Coolify deploy procedure, including:
+
+- Provisioning, DNS setup (Cloudflare DNS-only mode for Let's Encrypt to work)
+- Coolify env vars (`SENTRY_DSN`, `PUBLIC_SENTRY_DSN`, `APP_MAIL_RESEND_API_KEY`, `APP_DEMO_SEED`, etc.)
+- Daily pg_dump cron + the IPv6-aware healthcheck quirk
+- Sentry verification, UptimeRobot setup, SSH hardening with `00-kliniq-hardening.conf`
+- Common incidents — "site is down", "GHA built but the new image isn't running", "login succeeded but stuck on /login"
+
+## Tech stack (V1.1)
+
+- **Backend:** Kotlin 2.1 · Spring Boot 3.5 · Java 21 LTS · Flyway 10 · PostgreSQL 16 · Redis 7.4 · jOOQ 3.19 · WebAuthn4J · Argon2id · Sentry Spring Boot Starter 7.20
+- **Frontend:** SvelteKit 2 · Svelte 5 (runes) · TypeScript 6 · Tailwind CSS v4 · shadcn-svelte · bits-ui · `@sentry/sveltekit` 10
+- **Auth:** Spring Security + cookie sessions in Redis + WebAuthn4J passkeys (no JWT) + HIBP breach checks + per-IP exponential backoff
+- **Tests:** JUnit 5 · Testcontainers (postgres + redis) · `@ServiceConnection` · `webauthn4j-test` virtual authenticator · Vitest · Playwright
+- **Local infra:** Docker Compose · Mailpit · mkcert
+- **CI:** GitHub Actions · gitleaks · commitlint · dependabot
+- **Prod:** Hetzner CPX22 (€10.10/mo, 2 vCPU + 4 GB) · Coolify v4 · Caddy 2 · GHCR · Cloudflare DNS · Resend · Sentry · UptimeRobot
 
 ## Repository tour
 
 | Path | What lives here |
 |---|---|
-| [`apps/api/`](apps/api/) | Kotlin + Spring Boot 3.5 backend. Flyway migrations, Spring Security baseline, jOOQ joining in Sprint 1. |
-| [`apps/web/`](apps/web/) | SvelteKit 2 frontend with Tailwind v4 and the shadcn-svelte primitives, HTTPS dev server proxying to the API. |
-| [`brand-assets/`](brand-assets/) | Logo, app icon, illustrations, OG image. See [`brand-assets/README.md`](brand-assets/README.md). |
-| [`certs/`](certs/) | mkcert-issued local TLS material (gitignored). [`certs/README.md`](certs/README.md) explains regeneration. |
-| [`docs/`](docs/) | Architecture, domain, ADRs, sprint plans, design system. Source of truth — start here. |
+| [`apps/api/`](apps/api/) | Kotlin + Spring Boot backend. Flyway migrations, jOOQ codegen, Spring Security, WebAuthn4J, mail senders, audit log, the booking FSM + EXCLUDE-overlap enforcement. |
+| [`apps/web/`](apps/web/) | SvelteKit 2 frontend. Tailwind v4 + shadcn-svelte primitives, the onboarding wizard, Sentry wiring, CSP via `kit.csp`. |
+| [`brand-assets/`](brand-assets/) | Logo, app icon, illustrations, OG image. |
+| [`certs/`](certs/) | mkcert-issued local TLS material (gitignored). |
+| [`docs/`](docs/) | Architecture, domain, ADRs, sprint plans, design system, prod runbook. Source of truth — start here. |
 | [`compose.yaml`](compose.yaml) | Local infra: postgres 16, redis 7.4, mailpit. |
+| [`compose.prod.yaml`](compose.prod.yaml) | Prod stack used by Coolify on the Hetzner box: postgres, redis, mailpit, api (image-only), web (built on-host), caddy (inline Caddyfile). |
 | [`lefthook.yml`](lefthook.yml) | Pre-commit (gitleaks + lint) and pre-push (typecheck) hooks. |
-| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | CI: lint, typecheck, test, gitleaks. |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | CI: api build + test + lint + image push to GHCR, web lint + typecheck + unit, gitleaks. |
+| [`scripts/backup-pg.sh`](scripts/backup-pg.sh) | Daily 03:00 UTC `pg_dump` on the Hetzner box, 14-day retention. |
 
 ## Documentation
 
@@ -97,31 +177,25 @@ Read in this order to onboard:
 3. [`docs/DOMAIN.md`](docs/DOMAIN.md) — entities, ER model, business rules
 4. [`docs/REPO_STRUCTURE.md`](docs/REPO_STRUCTURE.md) — directory layout
 5. [`docs/DECISIONS.md`](docs/DECISIONS.md) — architecture decision records
-6. [`docs/STYLE.md`](docs/STYLE.md) — Kliniq Emerald design system
-7. [`docs/VISUALS.md`](docs/VISUALS.md) — visual style + AI prompts used to generate brand assets
+6. [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — prod operations
+7. [`docs/STYLE.md`](docs/STYLE.md) — Kliniq Emerald design system
+8. [`docs/VISUALS.md`](docs/VISUALS.md) — visual style + AI prompts used to generate brand assets
 
 Executable sprint plans:
 
 - [`docs/sprints/SPRINT_0.md`](docs/sprints/SPRINT_0.md) — foundation **✓ done**
 - [`docs/sprints/SPRINT_1.md`](docs/sprints/SPRINT_1.md) — authentication **✓ done**
-- [`docs/sprints/SPRINT_2.md`](docs/sprints/SPRINT_2.md) — booking core (in progress)
-
-## Tech stack (V1)
-
-- **Backend:** Kotlin 2.1 · Spring Boot 3.5 · Java 21 LTS · Flyway · PostgreSQL 16 · Redis 7.4
-- **Frontend:** SvelteKit 2 · Svelte 5 · TypeScript 5 · Tailwind CSS v4 · shadcn-svelte
-- **Auth:** Spring Security + cookie sessions in Redis + WebAuthn4J passkeys (no JWT) + HIBP breach checks + per-IP exponential backoff
-- **Tests:** JUnit 5 (60+ integration tests, 88.9% line coverage on the auth surface) · Vitest · Playwright (auth + passkey ceremonies via virtual authenticator)
-- **Local infra:** Docker Compose · Mailpit · mkcert
-- **CI:** GitHub Actions · gitleaks · commitlint · dependabot
-- **Deploy (deferred until V1 works locally):** Coolify on Hetzner CPX21
+- [`docs/sprints/SPRINT_2.md`](docs/sprints/SPRINT_2.md) — booking core **✓ done**
+- [`docs/sprints/SPRINT_3.md`](docs/sprints/SPRINT_3.md) — realtime + admin **✓ done**
+- [`docs/sprints/SPRINT_4.md`](docs/sprints/SPRINT_4.md) — V1 ship to prod **✓ done** (v1.0.0)
+- [`docs/sprints/SPRINT_5.md`](docs/sprints/SPRINT_5.md) — V1.1 hardening + UX polish (in progress)
 
 ## Working principles
 
 - **Every line of code is mine.** No copy-paste from other projects, no matter how similar.
-- **Local-first.** Get V1 running on a laptop before touching cloud infra.
+- **Local-first.** V1 ran on a laptop before touching cloud infra.
 - **Secrets never in git.** `.env.example` only. Pre-commit hook with gitleaks blocks accidents.
-- **Tests on critical paths from day one** — auth, booking, billing. Not "we'll add tests later."
+- **Tests on critical paths from day one** — auth, booking, realtime. Not "we'll add tests later."
 - **Conventional Commits.** `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`.
 - **Docs are source of truth.** If a decision isn't in `docs/`, it doesn't exist.
 
@@ -133,3 +207,4 @@ The docs in `docs/` plus the README are designed to be self-contained. To resume
 2. The current sprint file (`docs/sprints/SPRINT_*.md`)
 3. The relevant ADRs (`docs/DECISIONS.md`)
 4. The latest commits on `main` so it sees what's actually built vs planned
+5. [`docs/RUNBOOK.md`](docs/RUNBOOK.md) when anything touches prod
