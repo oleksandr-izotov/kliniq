@@ -119,6 +119,12 @@ services:
       APP_MAIL_RESEND_API_KEY: ${APP_MAIL_RESEND_API_KEY:-}
       APP_WEB_BASE_URL: ${APP_WEB_BASE_URL:-http://localhost}
       APP_MAIL_FROM: ${APP_MAIL_FROM:-no-reply@kliniq.local}
+      # Demo data seeder (Sprint 5 Day 57). When `true` the api wires
+      # DemoDataSeeder which inserts 3 ORs + 4 surgeons + ~10 bookings on
+      # first startup. Idempotent — re-running with rooms already present
+      # is a no-op. Real clinical deploys leave this unset (defaults to
+      # `false`); only the demo deploy at kliniq.izotov.dev sets it true.
+      APP_DEMO_SEED: ${APP_DEMO_SEED:-false}
     networks:
       - kliniq-prod-net
 
