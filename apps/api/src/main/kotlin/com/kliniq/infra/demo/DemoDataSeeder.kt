@@ -82,7 +82,11 @@ class DemoDataSeeder(
                 timezone = CLINIC_ZONE,
             ),
         )
-        log.info("demo-seed: clinic settings updated (09:00-18:00 Europe/Berlin)")
+        // Demo clinic is already fully configured by the seed; the
+        // onboarding wizard (Day 58) has nothing to ask. Stamp the column
+        // so the first-admin login on demo doesn't trigger the modal.
+        clinic.markOnboardedIfUnset(OffsetDateTime.now(ZoneOffset.UTC))
+        log.info("demo-seed: clinic settings updated + onboarded (09:00-18:00 Europe/Berlin)")
     }
 
     private fun seedOperatingRooms(): List<OperatingRoom> {

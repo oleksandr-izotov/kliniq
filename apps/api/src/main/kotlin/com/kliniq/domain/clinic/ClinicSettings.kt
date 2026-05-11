@@ -20,6 +20,12 @@ data class ClinicSettings(
     val workingHoursStart: LocalTime,
     val workingHoursEnd: LocalTime,
     val defaultBookingMinutes: Int,
+    /**
+     * Stamped once the first-admin onboarding wizard finishes. `null` means
+     * the wizard hasn't been completed yet and should be shown on the next
+     * admin sign-in. Non-null is terminal: the wizard never re-appears.
+     */
+    val onboardedAt: OffsetDateTime?,
     val updatedAt: OffsetDateTime,
 ) {
     init {
@@ -33,6 +39,8 @@ data class ClinicSettings(
             "defaultBookingMinutes must be $MIN_DEFAULT_BOOKING..$MAX_DEFAULT_BOOKING"
         }
     }
+
+    val isOnboarded: Boolean get() = onboardedAt != null
 
     companion object {
         const val MAX_NAME = 100

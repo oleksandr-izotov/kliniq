@@ -4,6 +4,7 @@ import com.kliniq.db.tables.references.CLINIC_SETTINGS
 import com.kliniq.domain.clinic.ClinicSettings
 import org.jooq.DSLContext
 import org.springframework.stereotype.Repository
+import java.time.OffsetDateTime
 import java.time.ZoneId
 
 /**
@@ -24,6 +25,13 @@ interface ClinicSettingsRepository {
      * No-op patches return the row unchanged.
      */
     fun update(patch: ClinicSettingsPatch): ClinicSettings
+
+    /**
+     * Stamp `onboarded_at` if it's currently NULL. Returns the refreshed row.
+     * Idempotent: a second call after the first one finds the column already
+     * stamped and returns the existing timestamp untouched.
+     */
+    fun markOnboardedIfUnset(at: OffsetDateTime): ClinicSettings
 }
 
 /**
@@ -91,6 +99,20 @@ class JooqClinicSettingsRepository(
         return get()
     }
 
+    @org.springframework.transaction.annotation.Transactional
+    override fun markOnboardedIfUnset(at: OffsetDateTime): ClinicSettings {
+        // Only stamp when currently NULL. Idempotent re-calls observe the
+        // existing timestamp and short-circuit — keeps the audit story
+        // honest (onboarding finished once, at that specific moment).
+        dsl
+            .update(CLINIC_SETTINGS)
+            .set(CLINIC_SETTINGS.ONBOARDED_AT, at)
+            .where(CLINIC_SETTINGS.ID.eq(1))
+            .and(CLINIC_SETTINGS.ONBOARDED_AT.isNull)
+            .execute()
+        return get()
+    }
+
     private fun com.kliniq.db.tables.records.ClinicSettingsRecord.toDomain(): ClinicSettings =
         ClinicSettings(
             name = requireNotNull(name),
@@ -98,6 +120,7 @@ class JooqClinicSettingsRepository(
             workingHoursStart = requireNotNull(workingHoursStart),
             workingHoursEnd = requireNotNull(workingHoursEnd),
             defaultBookingMinutes = requireNotNull(defaultBookingMinutes),
+            onboardedAt = onboardedAt,
             updatedAt = requireNotNull(updatedAt),
         )
 }

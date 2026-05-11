@@ -1,10 +1,13 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import { ApiError_, authApi } from '$lib/auth/api';
+	import { clinicApi, type ClinicSettingsDto } from '$lib/api/clinic';
 	import ModeToggle from '$lib/components/ModeToggle.svelte';
+	import OnboardingWizard from '$lib/components/onboarding/OnboardingWizard.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -12,6 +15,30 @@
 
 	const isManager = $derived(data.user.role === 'MANAGER' || data.user.role === 'ADMIN');
 	const isAdmin = $derived(data.user.role === 'ADMIN');
+
+	// Onboarding wizard: shown once per clinic when the first admin signs in
+	// before `clinic_settings.onboarded_at` has been stamped. After "Done"
+	// it's stamped server-side and the wizard never re-appears.
+	let clinicSettings = $state<ClinicSettingsDto | null>(null);
+	let wizardOpen = $state(false);
+
+	onMount(async () => {
+		if (!isAdmin) return;
+		try {
+			const s = await clinicApi.get();
+			clinicSettings = s;
+			if (!s.onboardedAt) wizardOpen = true;
+		} catch {
+			// Wizard is opportunistic — failing to load settings shouldn't break
+			// the home page. Admin can still navigate manually to Clinic settings.
+		}
+	});
+
+	function onWizardDone() {
+		wizardOpen = false;
+		// Refresh settings so a follow-up reload doesn't re-trigger the wizard.
+		clinicApi.get().then((s) => (clinicSettings = s));
+	}
 
 	async function logout() {
 		signingOut = true;
@@ -168,3 +195,7 @@
 		</Card.Root>
 	</div>
 </main>
+
+{#if clinicSettings && isAdmin}
+	<OnboardingWizard open={wizardOpen} initialSettings={clinicSettings} onDone={onWizardDone} />
+{/if}

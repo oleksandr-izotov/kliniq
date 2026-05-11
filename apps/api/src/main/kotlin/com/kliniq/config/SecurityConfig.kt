@@ -86,6 +86,9 @@ class SecurityConfig {
                 it
                     .requestMatchers(HttpMethod.PATCH, "/api/v1/clinic/settings")
                     .hasRole("ADMIN")
+                it
+                    .requestMatchers(HttpMethod.POST, "/api/v1/clinic/settings/onboard")
+                    .hasRole("ADMIN")
                 it.anyRequest().authenticated()
             }.addFilterBefore(sessionAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
             .exceptionHandling { ex ->
