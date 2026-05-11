@@ -38,43 +38,39 @@
 </svelte:head>
 
 <!--
-	Mobile (<lg): single column, illustration top, text below, scrollable.
-	Desktop (>=lg): full-viewport split, mirroring (auth)/+layout.svelte —
-	illustration's natural light background becomes the left panel, text
-	sits centered on the right against the page background. The illustration
-	is `object-cover` so it fills the panel regardless of aspect ratio.
+	Full-bleed illustration as hero background; text + CTA float over it in
+	a frosted card so the line-art (especially the green door at the
+	composition's centre) reads through behind the type. The illustration
+	is light-only — colours are pinned to slate / emerald rather than the
+	theme-aware tokens so the layout stays legible regardless of the
+	user's dark/light preference.
 -->
-<div class="grid min-h-screen bg-background lg:h-screen lg:grid-cols-2 lg:overflow-hidden">
-	<!-- Illustration panel — visible on every breakpoint; full-bleed on lg+ -->
-	<aside class="relative h-64 bg-muted lg:h-auto">
-		<img
-			src={illustration}
-			alt=""
-			class="absolute inset-0 h-full w-full object-cover"
-			width="1200"
-			height="1200"
-			decoding="async"
-		/>
+<main class="relative grid min-h-screen place-items-center overflow-hidden bg-stone-50">
+	<img
+		src={illustration}
+		alt=""
+		class="absolute inset-0 h-full w-full object-cover"
+		decoding="async"
+		aria-hidden="true"
+	/>
 
-		<!-- Logo, top-left corner -->
-		<header class="absolute top-6 left-6 flex items-center gap-2 lg:top-8 lg:left-8">
-			<img src="/icon.svg" alt="Kliniq logo" class="h-9 w-9 rounded-lg shadow-sm" />
-			<span class="text-xl font-bold tracking-tight text-foreground">kliniq</span>
-		</header>
-	</aside>
+	<!-- Logo top-left, on top of the illustration -->
+	<header class="absolute top-6 left-6 z-10 flex items-center gap-2">
+		<img src="/icon.svg" alt="Kliniq logo" class="h-9 w-9 rounded-lg shadow-sm" />
+		<span class="text-xl font-bold tracking-tight text-slate-900">kliniq</span>
+	</header>
 
-	<!-- Text panel -->
-	<main class="flex items-center justify-center p-6 lg:p-12">
-		<div class="w-full max-w-md space-y-6">
-			<div class="space-y-2">
-				<p class="text-xs font-semibold tracking-widest text-primary uppercase">
-					Error {status}
-				</p>
-				<h1 class="text-4xl font-bold tracking-tight">{title}</h1>
-				<p class="text-base text-muted-foreground">{blurb}</p>
-			</div>
-
+	<!-- Frosted-glass text card, vertically centred -->
+	<div
+		class="relative z-10 mx-6 w-full max-w-md space-y-5 rounded-3xl border border-white/40 bg-white/80 p-8 text-center shadow-2xl backdrop-blur-md"
+	>
+		<p class="text-xs font-semibold tracking-widest text-emerald-600 uppercase">
+			Error {status}
+		</p>
+		<h1 class="text-4xl font-bold tracking-tight text-slate-900">{title}</h1>
+		<p class="text-base leading-relaxed text-slate-600">{blurb}</p>
+		<div class="pt-2">
 			<Button href={cta.href} size="lg">{cta.label} →</Button>
 		</div>
-	</main>
-</div>
+	</div>
+</main>
