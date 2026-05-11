@@ -8,23 +8,23 @@ Two reasons to bundle: (1) infrastructure-only leaves the product feeling sparse
 
 Reliability / hardening:
 
-- [ ] Daily `pg_dump` cron on the Hetzner box; retention keeps the last 14 days locally
+- [x] Daily `pg_dump` cron on the Hetzner box; retention keeps the last 14 days locally
 - [ ] ~~Offsite backup to Backblaze B2 via Restic; one manual restore-test confirms the dump round-trips through B2 back into a working Postgres~~ — **deferred:** Day 52 punted out of V1.1 on 2026-05-09. Rationale: no paying clinic on the box means the only data at risk is the demo deploy's own dummy bookings; local 14-day retention is enough to cover that. Picks up again the day we onboard a real tenant.
-- [ ] Sentry hookup on both api (Spring Boot) and web (SvelteKit); error events flow to one project with `environment=prod` tag; source maps attached on the web side
-- [ ] UptimeRobot (or equivalent) pinging `/actuator/health/liveness` every 5 minutes; email alert verified by stopping the web container briefly
-- [ ] SSH hardening: `PasswordAuthentication no` in `/etc/ssh/sshd_config`, key-only login; fail2ban jail config verified
-- [ ] Coolify built-in proxy permanently disabled: `docker update --restart=no coolify-proxy` + verified across one daemon restart
-- [ ] CSP header added with a reasonable initial policy; verified no SPA console errors after rollout
-- [ ] GHA `api-image` job adds buildkit cache for Gradle deps + Docker layers; warm build time target < 90 seconds (currently ~5 minutes cold)
+- [x] Sentry hookup on both api (Spring Boot) and web (SvelteKit); error events flow to one project with `environment=prod` tag; source maps attached on the web side
+- [x] UptimeRobot (or equivalent) pinging `/actuator/health/liveness` every 5 minutes; email alert verified by stopping the web container briefly
+- [x] SSH hardening: `PasswordAuthentication no` in `/etc/ssh/sshd_config`, key-only login; fail2ban jail config verified
+- [x] Coolify built-in proxy permanently disabled: `docker update --restart=no coolify-proxy` + verified across one daemon restart
+- [x] CSP header added with a reasonable initial policy; verified no SPA console errors after rollout — implemented in `apps/web/svelte.config.js` (`kit.csp`) rather than Caddy after a Day 55 retro: SvelteKit's SSR'd inline scripts need per-page hash/nonce signing that only the framework can compute
+- [x] GHA `api-image` job adds buildkit cache for Gradle deps + Docker layers — `cache-from: type=gha` + `cache-to: type=gha,mode=max` on the buildx step, `gradle/actions/setup-gradle@v4` handles Gradle deps cache. **Warm-run baseline: 2 m 03 s** (best) / 2-3 m typical, not the aspirational 90 s; bottleneck is `flywayMigrate` + `generateJooq` against a real Postgres service container, not Docker layers
 
 UX polish:
 
-- [ ] `/(app)/admin/+layout.svelte` with a Tabs sub-nav (Users · Invitations · Audit)
-- [ ] Flyway migration `V5__demo_seed.sql` seeds 3 OR + 4 surgeons (mixed specialties) + 8–12 sample bookings spread across the next two weeks; gated behind `APP_DEMO_SEED=true` so prod doesn't seed without explicit opt-in
-- [ ] Onboarding wizard for the first admin signing up: clinic name + timezone, optional first OR, optional first invitation; one-shot, never shows again after the wizard's "Done"
-- [ ] `README.md` hero section rewritten: live URL, hero screenshot of `/schedule`, demo credentials, "Engineering deep dive" linking the load-bearing tests / migrations / ADRs
-- [ ] Branded 404 page replacing the SvelteKit default
-- [ ] Sprint 5 sanity checklist (below) all green
+- [x] `/(app)/admin/+layout.svelte` with a Tabs sub-nav (Users · Invitations · Audit)
+- [x] ~~Flyway migration `V5__demo_seed.sql`~~ — implemented as `DemoDataSeeder` Spring `ApplicationRunner` bean gated behind `@ConditionalOnProperty(name = "app.demo.seed")` instead. Seeds 3 OR + 4 surgeons (mixed specialties) + 10 bookings spread across the next two weeks; idempotent (skips when rooms already exist). Reason for the swap: keeps `flyway_schema_history` clean of data-only entries and lets the seed toggle on/off without burning a migration slot
+- [x] Onboarding wizard for the first admin signing up: clinic name + timezone, optional first OR, optional first invitation; one-shot, never shows again after the wizard's "Done"
+- [x] `README.md` hero section rewritten: live URL, hero screenshot of `/schedule`, demo credentials, "Engineering deep dive" linking the load-bearing tests / migrations / ADRs
+- [x] Branded 404 page replacing the SvelteKit default
+- [x] Sprint 5 sanity checklist (below) all green
 
 **Estimated effort:** 10 days at chaotic pace.
 
@@ -149,41 +149,58 @@ Punted out of Sprint 5 on 2026-05-09. The only data on the box is the demo deplo
 
 ## Sprint 5 sanity checklist
 
-- [ ] **Backups round-trip** — local pg_dump → sidecar restore-test verified; counts match. (Offsite B2 leg deferred — see Day 52.)
-- [ ] **Sentry events flow** — api crash + web crash both visible in the Sentry dashboard within 1 minute of being thrown.
-- [ ] **UptimeRobot pings** — green ticks every 5 minutes; alert email tested by stopping a container briefly.
-- [ ] **SSH key-only** — password auth disabled, key auth verified across one reboot.
-- [ ] **Coolify proxy locked** — `coolify-proxy` doesn't restart after a docker daemon restart.
-- [ ] **CSP** — header set, no SPA breakage.
-- [ ] **Admin sub-nav** — navigating between Users / Invitations / Audit works without typing URLs.
-- [ ] **Demo seed** — `APP_DEMO_SEED=true` on a fresh deploy populates the schedule.
-- [ ] **Onboarding wizard** — first admin login triggers the wizard; second login doesn't.
-- [ ] **README polished** — hero + screenshot + demo creds + engineering deep-dive sections present.
-- [ ] **404 branded** — `https://kliniq.izotov.dev/does-not-exist` renders the Kliniq-branded page, not the SvelteKit default.
+- [x] **Backups round-trip** — local pg_dump → sidecar restore-test verified; counts match. (Offsite B2 leg deferred — see Day 52.)
+- [x] **Sentry events flow** — api crash (`/api/v1/dev/sentry-smoke`) + web crash (`setTimeout(() => { throw … })`) both visible on the Sentry dashboard within ~60 s.
+- [x] **UptimeRobot pings** — `kliniq-api liveness` monitor green at 5-min interval; alert tested manually by stopping the api container briefly.
+- [x] **SSH key-only** — `PasswordAuthentication no` honoured (override snippet `00-kliniq-hardening.conf` beats cloud-init's `50-cloud-init.conf` alphabetically); password-auth probe from a fresh terminal returns `Permission denied (publickey).` without password prompt.
+- [x] **Coolify proxy locked** — `docker ps -a --filter 'name=coolify-proxy'` returns empty; removed manually in Sprint 4 Day 49 and the Coolify UI toggle is off so Coolify doesn't recreate it.
+- [x] **CSP** — set via SvelteKit `kit.csp` (per-page `<meta>` with sha256 hashes); no SPA console violations across `/schedule`, `/operating-rooms`, `/admin/*`, `/settings/*`.
+- [x] **Admin sub-nav** — Tabs (Users · Invitations · Audit log) on every `/admin/*` page with active-tab styling.
+- [x] **Demo seed** — `APP_DEMO_SEED=true` on a fresh restart populated 3 OR + 4 surgeons + 10 bookings; idempotent re-run skipped cleanly with "operating rooms already exist" log line.
+- [x] **Onboarding wizard** — first admin login triggers the wizard (3 steps, "Skip" allowed on 2 + 3); second login no longer shows it (`clinic_settings.onboarded_at` stamped).
+- [x] **README polished** — hero (live URL + demo creds table) + Mermaid architecture diagram + Engineering deep-dive section with file-path links + Tech stack (V1.1) + Repository tour all present.
+- [x] **404 branded** — `https://kliniq.izotov.dev/does-not-exist` renders the Kliniq-branded full-bleed illustration with a frosted-glass text card; SvelteKit default is gone.
 
 ---
 
 ## Sprint 5 retro
 
-_(filled at sprint close)_
+_Closed 2026-05-11._
 
-**Coverage on the Sprint 5 surface (JaCoCo, `gradlew check`)**
+**Coverage on the api codebase (JaCoCo, full repo, `./gradlew test jacocoTestReport`)**
 
-_(table filled at close — same shape as Sprint 2 / 3 / 4)_
+| Counter | Covered | Missed | Coverage |
+| --- | ---:| ---:| ---:|
+| Lines | 3325 | 617 | **84.3 %** |
+| Methods | 949 | 106 | 89.9 % |
+| Classes | 233 | 19 | 92.5 % |
+| Branches | 859 | 563 | 60.4 % |
+| Instructions | 16 560 | 4 543 | 78.5 % |
+
+Line coverage is the headline number; the branch number is lower because guard-clauses on auth-tokens and FSM transitions contain a lot of "wrong state" branches that aren't currently driven by integration tests. Worth tightening in Sprint 6.
 
 **What went well**
--
+- The two infrastructure surprises (Caddy CSP header invalidating SvelteKit's nonce-based CSP, Alpine `localhost` resolving to IPv6 before the IPv4 listener) both turned into one-line fixes once diagnosed. The split-the-problem-in-two-direction approach (header vs document, container-vs-loopback) was faster than reading docs cover-to-cover.
+- `DemoDataSeeder` as an `ApplicationRunner` + `@ConditionalOnProperty` beats a Flyway V5 seed migration: opt-in via env var without touching `flyway_schema_history`, idempotent against partial runs, and the demo can be re-seeded by wiping rooms + restarting the api rather than burning a fresh migration number.
+- A `00-` snippet prefix in `/etc/ssh/sshd_config.d/` is a clean override pattern — survives any cloud-init regeneration and beats editing the cloud-init file directly, because OpenSSH's first-match-wins rule means the alphabetically-earliest snippet wins.
+- README split between hero (live demo + creds table) and "Engineering deep dive" (file-linked load-bearing decisions) ends up serving two readers well: a recruiter can click straight to the site; a reviewer can scroll one section down and skim the actual interesting code.
 
 **What was harder than expected**
--
+- CSP turned into three commits, not one. First version put it on Caddy and broke hydration; second moved it to SvelteKit with `mode: 'auto'` (nonces); third added an explicit sha256 hash for the `mode-watcher` inline theme-detect script that the framework's hash collector misses because of its `{@html}` injection path. Trade-off accepted: any future `mode-watcher` version bump that changes the body of that script will reintroduce the violation and need a one-line hash update.
+- The Hetzner cloud-init snippet (`/etc/ssh/sshd_config.d/50-cloud-init.conf`) silently wins over the main `sshd_config` because of OpenSSH's "first match wins" rule + the Include directive ordering. Editing the main file alone did nothing visible until the snippet was either replaced or beaten alphabetically by a `00-` prefix.
+- Sentry's "Allowed Domains" project-level CORS list defaulted to including localhost only on the kliniq-web project (not on kliniq-api), so the first browser event got 403'd from Sentry's edge despite a fully-wired SDK. Diagnosable by inspecting the POST response (CORS error has a recognisable shape vs a network failure), but a `Refused to connect` from CSP and a 403 from Sentry's allowlist look identical at first glance.
+- The web container's `/healthz` looked broken on the first prod deploy of Day 54 because BusyBox `wget` resolves `localhost` to `::1` first and adapter-node only binds the IPv4 wildcard. Fix is one literal change (`http://localhost:3000` → `http://127.0.0.1:3000`) but discovering it required `netstat -tln` + `wget` from inside the container, since the site itself worked fine through Caddy.
 
-**Time spent vs estimate:** ___ days vs estimated 10
+**Time spent vs estimate:** ~3 days of execution wall time vs estimated 10 days. The compression came from (a) deferring Day 52 (Restic + B2) out of scope until a real paying tenant exists, and (b) keeping each day's commit tight rather than batching cross-cutting changes.
+
+**Sprint 5 sanity review:** 10 of 11 green; offsite-backup leg deferred as documented.
 
 **What I'd carry into Sprint 6 planning** (V2 — customer portal)
--
+- **Multi-tenancy is the next big surface area.** V1 single-tenant means every Coolify deploy is per-clinic; V2 with patient portals needs tenant isolation in the data model + scoped sessions. Plan an ADR for it before any code.
+- **Source-map upload pipeline for web should move into CI** rather than the Coolify on-host build. Right now `SENTRY_AUTH_TOKEN` lives on the deploy host and the upload happens on every Coolify Deploy; cleaner to bake the web image in GHA the same way api is, and let Coolify pull both from GHCR.
+- **Branch CSP into strict-dynamic + nonces** so we can drop `'unsafe-inline'` from `style-src`. Requires shadcn-svelte to stop runtime-injecting per-component `<style>` blocks, or for SvelteKit's CSP hashing to be extended to cover them.
+- **CI warm `api-image` time is currently 2-3 minutes**, not the aspirational 90 s. Bottleneck is `flywayMigrate` + `generateJooq` against a real Postgres service container, not Docker layers. If we ever care, options are (1) commit generated jOOQ sources (bigger repo, smaller CI), (2) split codegen out as a separately-cached step.
 
-**Sprint 5 sanity review:** all green? ___
-
-**First user encounter under V1.1:** when did you send the URL to a real human and what did they break? ___
+**First user encounter under V1.1:** _(deferred — no real-human demo session held yet; send link to one trusted reviewer for honest feedback during Sprint 6 planning.)_
 
 → Then **V2 — customer portal** (Sprint 6 planning). The pitch: patient-facing booking widget, self-service appointment booking, recurring routines, drag-drop schedule. Multi-month block of work and the first time we'd seriously think about multi-tenancy, billing, and "actual paying customers".
