@@ -4,7 +4,8 @@
 
 	// `page.status` is whatever SvelteKit set when routing failed (404 for an
 	// unknown path) or whatever a load function threw. `page.error.message`
-	// carries the human-readable text either of those produced.
+	// is the human-readable text either of those produced — duplicates the
+	// title for plain 404s ("Not Found") so we don't render it separately.
 	const status = $derived(page.status);
 	const title = $derived(
 		status === 404
@@ -27,10 +28,6 @@
 	const cta = $derived(
 		status === 401 ? { href: '/login', label: 'Sign in' } : { href: '/', label: 'Back to home' }
 	);
-	// One illustration per status family: 404 gets its bespoke art, anything
-	// 5xx (or unhandled) gets the matching "something broke" art. 401/403
-	// reuse 404 because the visual mood (gentle, "you took a wrong turn")
-	// fits better than the heavier 500 art.
 	const illustration = $derived(
 		status >= 500 ? '/illustrations/error-500.png' : '/illustrations/error-404.png'
 	);
@@ -40,31 +37,44 @@
 	<title>{status} · {title} · Kliniq</title>
 </svelte:head>
 
-<main class="grid min-h-screen place-items-center bg-background p-6">
-	<div class="w-full max-w-md space-y-6 text-center">
+<!--
+	Mobile (<lg): single column, illustration top, text below, scrollable.
+	Desktop (>=lg): full-viewport split, mirroring (auth)/+layout.svelte —
+	illustration's natural light background becomes the left panel, text
+	sits centered on the right against the page background. The illustration
+	is `object-cover` so it fills the panel regardless of aspect ratio.
+-->
+<div class="grid min-h-screen bg-background lg:h-screen lg:grid-cols-2 lg:overflow-hidden">
+	<!-- Illustration panel — visible on every breakpoint; full-bleed on lg+ -->
+	<aside class="relative h-64 bg-muted lg:h-auto">
 		<img
 			src={illustration}
 			alt=""
-			class="mx-auto h-48 w-auto"
-			width="512"
-			height="512"
-			loading="eager"
+			class="absolute inset-0 h-full w-full object-cover"
+			width="1200"
+			height="1200"
+			decoding="async"
 		/>
 
-		<div class="space-y-2">
-			<p class="text-sm font-medium tracking-widest text-muted-foreground uppercase">
-				Error {status}
-			</p>
-			<h1 class="text-3xl font-bold tracking-tight">{title}</h1>
-			<p class="text-sm text-muted-foreground">{blurb}</p>
+		<!-- Logo, top-left corner -->
+		<header class="absolute top-6 left-6 flex items-center gap-2 lg:top-8 lg:left-8">
+			<img src="/icon.svg" alt="Kliniq logo" class="h-9 w-9 rounded-lg shadow-sm" />
+			<span class="text-xl font-bold tracking-tight text-foreground">kliniq</span>
+		</header>
+	</aside>
+
+	<!-- Text panel -->
+	<main class="flex items-center justify-center p-6 lg:p-12">
+		<div class="w-full max-w-md space-y-6">
+			<div class="space-y-2">
+				<p class="text-xs font-semibold tracking-widest text-primary uppercase">
+					Error {status}
+				</p>
+				<h1 class="text-4xl font-bold tracking-tight">{title}</h1>
+				<p class="text-base text-muted-foreground">{blurb}</p>
+			</div>
+
+			<Button href={cta.href} size="lg">{cta.label} →</Button>
 		</div>
-
-		{#if page.error?.message && page.error.message !== title}
-			<p class="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-				{page.error.message}
-			</p>
-		{/if}
-
-		<Button href={cta.href}>{cta.label} →</Button>
-	</div>
-</main>
+	</main>
+</div>
