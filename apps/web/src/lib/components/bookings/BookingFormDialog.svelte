@@ -228,7 +228,7 @@
 	bind:this={dlg}
 	oncancel={onCancel}
 	onclose={onCancel}
-	class="w-full max-w-xl rounded-2xl bg-background p-0 text-foreground shadow-xl backdrop:bg-black/40"
+	class="h-full max-h-screen w-full rounded-none bg-background p-0 text-foreground shadow-xl backdrop:bg-black/40 sm:h-auto sm:max-h-[90vh] sm:max-w-xl sm:rounded-2xl"
 >
 	<form onsubmit={submit} class="space-y-4 p-6" novalidate>
 		<header class="space-y-1">

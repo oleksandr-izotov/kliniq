@@ -246,7 +246,7 @@
 	<title>Schedule · Kliniq</title>
 </svelte:head>
 
-<main class="min-h-screen bg-background p-6">
+<main class="min-h-screen bg-background p-4 sm:p-6">
 	<div class="mx-auto w-full max-w-7xl space-y-4">
 		<header class="flex flex-wrap items-end justify-between gap-3">
 			<div class="space-y-1">
@@ -295,7 +295,7 @@
 						bind:value={date}
 						onchange={dateChanged}
 						disabled={loading}
-						class="w-44"
+						class="w-36 sm:w-44"
 					/>
 					<Button variant="outline" size="sm" onclick={() => shiftDate(1)} disabled={loading}>
 						Next →
@@ -369,43 +369,49 @@
 				</p>
 			</div>
 		{:else if view === 'day' && schedule}
-			<div class="overflow-x-auto rounded-2xl border">
-				<div class="flex min-w-max">
-					<!-- Time gutter -->
-					<div class="w-16 shrink-0 border-r bg-muted/40">
-						<div class="flex h-12 items-center justify-center border-b border-border text-xs">
-							Time
-						</div>
-						<div class="relative" style:height="{totalPx}px">
-							{#each hourTicks as t (t.minute)}
-								<div
-									class="absolute -translate-y-1/2 px-2 text-right text-xs text-muted-foreground"
-									style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px"
-								>
-									{t.label}
+			<!--
+				Day-view layout: each OR is a self-contained card with its own
+				time gutter on the left and slot column on the right. Cards lay
+				out in a CSS auto-fit grid — single column below `lg`, multi-
+				column on larger viewports (`minmax(280px, 1fr)` means
+				"as many columns as fit at ≥280 px each"). Replaces the original
+				min-w-max horizontal-scroll layout which forced phones into a
+				horizontal-scroll-of-shame.
+			-->
+			<div
+				class="grid grid-cols-1 gap-4 lg:[grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]"
+			>
+				{#each schedule.operatingRooms as or (or.id)}
+					<article class="overflow-hidden rounded-2xl border">
+						<header
+							class="flex h-14 flex-col items-center justify-center border-b border-border bg-muted/40 px-2"
+						>
+							<span class="font-mono text-xs text-muted-foreground">{or.code}</span>
+							<span class="truncate text-sm font-medium">{or.name}</span>
+							{#if or.status !== 'ACTIVE'}
+								<span class="rounded bg-muted px-1 text-[10px] text-muted-foreground uppercase">
+									{or.status}
+								</span>
+							{/if}
+						</header>
+						<div class="flex">
+							<!-- Time gutter -->
+							<div class="w-12 shrink-0 border-r bg-muted/40 sm:w-16">
+								<div class="relative" style:height="{totalPx}px">
+									{#each hourTicks as t (t.minute)}
+										<div
+											class="absolute -translate-y-1/2 px-2 text-right text-xs text-muted-foreground"
+											style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px"
+										>
+											{t.label}
+										</div>
+									{/each}
 								</div>
-							{/each}
-						</div>
-					</div>
-
-					<!-- Per-OR columns -->
-					{#each schedule.operatingRooms as or (or.id)}
-						<div class="w-56 shrink-0 border-r border-border last:border-r-0">
-							<div
-								class="flex h-12 flex-col items-center justify-center border-b border-border px-2"
-							>
-								<span class="font-mono text-xs text-muted-foreground">{or.code}</span>
-								<span class="truncate text-sm font-medium">{or.name}</span>
-								{#if or.status !== 'ACTIVE'}
-									<span class="rounded bg-muted px-1 text-[10px] text-muted-foreground uppercase">
-										{or.status}
-									</span>
-								{/if}
 							</div>
 							<!-- svelte-ignore a11y_click_events_have_key_events -->
 							<!-- svelte-ignore a11y_no_static_element_interactions -->
 							<div
-								class="relative w-full cursor-cell hover:bg-muted/30"
+								class="relative flex-1 cursor-cell hover:bg-muted/30"
 								style:height="{totalPx}px"
 								onclick={(e) => openCreate(or.id, date, e)}
 								aria-label="Create booking in {or.code}"
@@ -442,8 +448,8 @@
 								{/each}
 							</div>
 						</div>
-					{/each}
-				</div>
+					</article>
+				{/each}
 			</div>
 
 			{#if scheduleLoading}
@@ -451,7 +457,13 @@
 			{/if}
 		{:else if view === 'week' && weekSchedule}
 			{@const ws = weekSchedule}
-			<div class="overflow-x-auto rounded-2xl border">
+			<!--
+				Week-view keeps the horizontal-scroll layout — 7 day columns
+				don't stack usefully on a phone. `snap-x snap-mandatory` on the
+				scroller + `snap-start` on each day column gives the scroll a
+				per-day snap so swiping feels deliberate instead of slippery.
+			-->
+			<div class="snap-x snap-mandatory overflow-x-auto rounded-2xl border">
 				<div class="flex min-w-max">
 					<!-- Time gutter (same as day-view) -->
 					<div class="w-16 shrink-0 border-r bg-muted/40">
@@ -473,7 +485,7 @@
 					<!-- Per-day columns (always 7) -->
 					{#each ws.days as day (day.date)}
 						<div
-							class="w-44 shrink-0 border-r border-border last:border-r-0"
+							class="w-44 shrink-0 snap-start border-r border-border last:border-r-0"
 							data-testid="week-col-{day.date}"
 						>
 							<div
