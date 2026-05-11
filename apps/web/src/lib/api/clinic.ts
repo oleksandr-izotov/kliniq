@@ -1,15 +1,7 @@
 import { apiRequest } from '../auth/api';
 import type { Schemas } from './index';
 
-/**
- * `onboardedAt` is added in Sprint 5 Day 58 (backend migration V5) but
- * lives outside the generated DTO until the next `pnpm gen:api` against
- * the deployed spec. The intersection augments the generated type with
- * the additional field without forking generated.ts.
- */
-export type ClinicSettingsDto = Schemas['ClinicSettingsDto'] & {
-	onboardedAt: string | null;
-};
+export type ClinicSettingsDto = Schemas['ClinicSettingsDto'];
 export type UpdateClinicSettingsRequest = Schemas['UpdateClinicSettingsRequest'];
 
 /**

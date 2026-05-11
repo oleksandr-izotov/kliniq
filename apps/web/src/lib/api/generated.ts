@@ -20,6 +20,22 @@ export interface paths {
 		readonly patch?: never;
 		readonly trace?: never;
 	};
+	readonly '/api/v1/clinic/settings/onboard': {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly get?: never;
+		readonly put?: never;
+		readonly post: operations['onboard'];
+		readonly delete?: never;
+		readonly options?: never;
+		readonly head?: never;
+		readonly patch?: never;
+		readonly trace?: never;
+	};
 	readonly '/api/v1/bookings': {
 		readonly parameters: {
 			readonly query?: never;
@@ -541,6 +557,18 @@ export interface components {
 			readonly name: string;
 			readonly notes?: string;
 		};
+		readonly ClinicSettingsDto: {
+			readonly name: string;
+			readonly timezone: string;
+			/** @example 14:30:00 */
+			readonly workingHoursStart: string;
+			/** @example 14:30:00 */
+			readonly workingHoursEnd: string;
+			/** Format: int32 */
+			readonly defaultBookingMinutes: number;
+			/** Format: date-time */
+			readonly onboardedAt?: string;
+		};
 		readonly CreateBookingRequest: {
 			/** Format: uuid */
 			readonly operatingRoomId: string;
@@ -802,16 +830,6 @@ export interface components {
 			/** Format: int64 */
 			readonly timeout: number;
 		};
-		readonly ClinicSettingsDto: {
-			readonly name: string;
-			readonly timezone: string;
-			/** @example 14:30:00 */
-			readonly workingHoursStart: string;
-			/** @example 14:30:00 */
-			readonly workingHoursEnd: string;
-			/** Format: int32 */
-			readonly defaultBookingMinutes: number;
-		};
 		readonly PasskeySummary: {
 			/** Format: uuid */
 			readonly id: string;
@@ -978,6 +996,26 @@ export interface operations {
 				};
 				content: {
 					readonly '*/*': Record<string, never>;
+				};
+			};
+		};
+	};
+	readonly onboard: {
+		readonly parameters: {
+			readonly query?: never;
+			readonly header?: never;
+			readonly path?: never;
+			readonly cookie?: never;
+		};
+		readonly requestBody?: never;
+		readonly responses: {
+			/** @description OK */
+			readonly 200: {
+				headers: {
+					readonly [name: string]: unknown;
+				};
+				content: {
+					readonly '*/*': components['schemas']['ClinicSettingsDto'];
 				};
 			};
 		};
