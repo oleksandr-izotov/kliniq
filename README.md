@@ -1,11 +1,17 @@
-# Kliniq
+<p align="center">
+  <img src="brand-assets/logo/kliniq-wordmark.png" alt="kliniq" width="280" />
+</p>
 
-[![CI](https://github.com/oleksandr-izotov/kliniq/actions/workflows/ci.yml/badge.svg)](https://github.com/oleksandr-izotov/kliniq/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-emerald.svg)](LICENSE)
-[![Kotlin](https://img.shields.io/badge/kotlin-2.1-7F52FF.svg?logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Spring Boot](https://img.shields.io/badge/spring%20boot-3.5-6DB33F.svg?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
-[![SvelteKit](https://img.shields.io/badge/sveltekit-2-FF3E00.svg?logo=svelte&logoColor=white)](https://svelte.dev)
-[![Tailwind v4](https://img.shields.io/badge/tailwind-v4-06B6D4.svg?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+<p align="center">
+  <a href="https://github.com/oleksandr-izotov/kliniq/actions/workflows/ci.yml"><img src="https://github.com/oleksandr-izotov/kliniq/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-emerald.svg" alt="License: MIT" /></a>
+  <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/kotlin-2.1-7F52FF.svg?logo=kotlin&logoColor=white" alt="Kotlin" /></a>
+  <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/spring%20boot-3.5-6DB33F.svg?logo=springboot&logoColor=white" alt="Spring Boot" /></a>
+  <a href="https://svelte.dev"><img src="https://img.shields.io/badge/sveltekit-2-FF3E00.svg?logo=svelte&logoColor=white" alt="SvelteKit" /></a>
+  <a href="https://tailwindcss.com"><img src="https://img.shields.io/badge/tailwind-v4-06B6D4.svg?logo=tailwindcss&logoColor=white" alt="Tailwind v4" /></a>
+</p>
+
+# Kliniq
 
 > Single-tenant operating-room scheduling SaaS for medical clinics. Clinic staff manage operating rooms, surgeons, and bookings on a shared schedule; the database refuses double-booked rooms at the row level (Postgres `EXCLUDE USING gist`), and the realtime backplane broadcasts every change to every open browser tab.
 
