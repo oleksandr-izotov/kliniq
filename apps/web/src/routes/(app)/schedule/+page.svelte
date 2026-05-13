@@ -13,6 +13,7 @@
 		addDays,
 		formatLocalTime,
 		localMinutesOfDay,
+		localToIso,
 		timeStringToMinutes,
 		todayInZone
 	} from '$lib/util/datetime';
@@ -51,6 +52,12 @@
 
 	// ---- Side panel state ------------------------------------------------
 	let selectedBooking = $state<BookingDto | null>(null);
+
+	// ---- Drag-drop reschedule state --------------------------------------
+	// `draggingId` drives the source booking's opacity; `dragOverOrId` rings
+	// the slot column currently under the cursor. Both clear on dragend.
+	let draggingId = $state<string | null>(null);
+	let dragOverOrId = $state<string | null>(null);
 
 	// ---- Real-time stream ------------------------------------------------
 	let stream: BookingEventStream | null = null;
@@ -188,6 +195,142 @@
 			case 'CANCELLED':
 				return 'bg-muted border-border text-muted-foreground line-through';
 		}
+	}
+
+	// ---- Drag-drop reschedule -------------------------------------------
+	// HTML5 native drag-drop only — mobile/touch users keep the existing
+	// edit-dialog flow as the fallback. The booking's id, source OR, and
+	// original duration travel through dataTransfer so the drop handler
+	// doesn't need to look the booking up by id in component state.
+	type DragPayload = {
+		id: string;
+		sourceOperatingRoomId: string;
+		durationMs: number;
+	};
+
+	function handleBookingDragStart(e: DragEvent, b: BookingDto) {
+		// Terminal-state bookings (COMPLETED / CANCELLED) shouldn't move.
+		if (b.status !== 'SCHEDULED' && b.status !== 'IN_PROGRESS') {
+			e.preventDefault();
+			return;
+		}
+		if (!e.dataTransfer) return;
+		const payload: DragPayload = {
+			id: b.id,
+			sourceOperatingRoomId: b.operatingRoomId,
+			durationMs: new Date(b.endsAt).getTime() - new Date(b.startsAt).getTime()
+		};
+		e.dataTransfer.setData('application/json', JSON.stringify(payload));
+		e.dataTransfer.effectAllowed = 'move';
+		draggingId = b.id;
+	}
+
+	function handleBookingDragEnd() {
+		draggingId = null;
+		dragOverOrId = null;
+	}
+
+	function handleSlotDragOver(e: DragEvent, orId: string) {
+		if (!draggingId) return;
+		e.preventDefault(); // mandatory so the matching drop event fires
+		if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+		dragOverOrId = orId;
+	}
+
+	function handleSlotDragLeave(orId: string) {
+		if (dragOverOrId === orId) dragOverOrId = null;
+	}
+
+	async function handleSlotDrop(e: DragEvent, targetOrId: string) {
+		e.preventDefault();
+		dragOverOrId = null;
+		draggingId = null;
+		if (!e.dataTransfer || !clinic || !schedule) return;
+
+		const raw = e.dataTransfer.getData('application/json');
+		if (!raw) return;
+		let payload: DragPayload;
+		try {
+			payload = JSON.parse(raw) as DragPayload;
+		} catch {
+			return;
+		}
+
+		// Find the original booking (might live in any OR's bookings list)
+		const booking = schedule.operatingRooms
+			.flatMap((or) => or.bookings)
+			.find((b) => b.id === payload.id);
+		if (!booking) return;
+
+		// Map drop Y → minutes-of-day, snap to SLOT_MINUTES
+		const target = e.currentTarget as HTMLElement;
+		const rect = target.getBoundingClientRect();
+		const offsetY = e.clientY - rect.top;
+		const minutesFromColStart = offsetY / PIXELS_PER_MINUTE;
+		const absoluteMinutes =
+			Math.round((startMin + minutesFromColStart) / SLOT_MINUTES) * SLOT_MINUTES;
+		const newEndMinutes = absoluteMinutes + payload.durationMs / 60_000;
+
+		if (absoluteMinutes < 0 || newEndMinutes > 24 * 60) {
+			toast.error('Booking would fall outside the day.');
+			return;
+		}
+
+		const newStartTime = `${Math.floor(absoluteMinutes / 60)
+			.toString()
+			.padStart(2, '0')}:${(absoluteMinutes % 60).toString().padStart(2, '0')}`;
+		const newStartIso = localToIso(date, newStartTime, clinic.timezone);
+		const newEndIso = new Date(new Date(newStartIso).getTime() + payload.durationMs).toISOString();
+
+		// No-op if nothing changed
+		if (newStartIso === booking.startsAt && targetOrId === booking.operatingRoomId) return;
+
+		// Optimistic local mutation — SSE will reconcile on success, we
+		// revert manually on failure.
+		const oldStart = booking.startsAt;
+		const oldEnd = booking.endsAt;
+		const oldOrId = booking.operatingRoomId;
+		applyLocalMove(payload.id, targetOrId, newStartIso, newEndIso);
+
+		try {
+			await bookingsApi.update(payload.id, {
+				operatingRoomId: targetOrId,
+				surgeonId: booking.surgeonId,
+				startsAt: newStartIso,
+				endsAt: newEndIso,
+				opType: booking.opType,
+				notes: booking.notes ?? ''
+			});
+		} catch (err) {
+			applyLocalMove(payload.id, oldOrId, oldStart, oldEnd);
+			if (err instanceof ApiError_) {
+				if (err.payload.code === 'BOOKING_CONFLICT') {
+					toast.error('That slot is already booked.');
+				} else {
+					toast.error(err.payload.message || 'Could not move the booking.');
+				}
+			} else {
+				toast.error('Network error.');
+			}
+		}
+	}
+
+	function applyLocalMove(id: string, targetOrId: string, newStart: string, newEnd: string) {
+		if (!schedule) return;
+		// Re-bucket by operatingRoomId after updating the moved booking's
+		// fields. Keeps the day-view in sync whether the drop was within
+		// the same OR (re-time) or cross-OR (re-room + re-time).
+		const flat = schedule.operatingRooms.flatMap((or) => or.bookings);
+		const updated = flat.map((b) =>
+			b.id === id ? { ...b, startsAt: newStart, endsAt: newEnd, operatingRoomId: targetOrId } : b
+		);
+		schedule = {
+			...schedule,
+			operatingRooms: schedule.operatingRooms.map((or) => ({
+				...or,
+				bookings: updated.filter((b) => b.operatingRoomId === or.id)
+			}))
+		};
 	}
 
 	// ---- Click handling --------------------------------------------------
@@ -411,9 +554,14 @@
 							<!-- svelte-ignore a11y_click_events_have_key_events -->
 							<!-- svelte-ignore a11y_no_static_element_interactions -->
 							<div
-								class="relative flex-1 cursor-cell hover:bg-muted/30"
+								class="relative flex-1 cursor-cell hover:bg-muted/30 {dragOverOrId === or.id
+									? 'ring-2 ring-primary/40 ring-inset'
+									: ''}"
 								style:height="{totalPx}px"
 								onclick={(e) => openCreate(or.id, date, e)}
+								ondragover={(e) => handleSlotDragOver(e, or.id)}
+								ondragleave={() => handleSlotDragLeave(or.id)}
+								ondrop={(e) => handleSlotDrop(e, or.id)}
 								aria-label="Create booking in {or.code}"
 							>
 								<!-- Hour grid lines -->
@@ -425,13 +573,20 @@
 								{/each}
 								<!-- Booking blocks -->
 								{#each or.bookings as b (b.id)}
+									{@const canDrag = b.status === 'SCHEDULED' || b.status === 'IN_PROGRESS'}
 									<button
 										type="button"
 										class="absolute right-1 left-1 cursor-pointer rounded border px-2 py-1 text-left text-xs shadow-sm {statusColor(
 											b.status
-										)} {selectedBooking?.id === b.id ? 'ring-2 ring-primary' : ''}"
+										)} {selectedBooking?.id === b.id ? 'ring-2 ring-primary' : ''} {draggingId ===
+										b.id
+											? 'opacity-50'
+											: ''}"
 										style:top="{bookingTop(b)}px"
 										style:height="{bookingHeight(b)}px"
+										draggable={canDrag}
+										ondragstart={(e) => handleBookingDragStart(e, b)}
+										ondragend={handleBookingDragEnd}
 										onclick={(e) => {
 											e.stopPropagation();
 											selectBooking(b);
