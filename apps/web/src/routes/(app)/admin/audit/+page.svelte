@@ -149,7 +149,8 @@
 			{listError}
 		</p>
 	{:else if page}
-		<div class="overflow-x-auto rounded-2xl border">
+		<!-- Desktop table -->
+		<div class="hidden overflow-x-auto rounded-2xl border md:block">
 			<table class="w-full text-sm">
 				<thead class="bg-muted/40 text-left text-xs text-muted-foreground uppercase">
 					<tr>
@@ -195,6 +196,37 @@
 				</tbody>
 			</table>
 		</div>
+
+		<!-- Mobile cards: one tappable card per event opens the same side panel -->
+		<ul class="space-y-2 md:hidden">
+			{#each page.items as e (e.id)}
+				<li>
+					<button
+						type="button"
+						class="w-full space-y-1.5 rounded-2xl border p-3 text-left hover:bg-muted/40 {selected?.id ===
+						e.id
+							? 'bg-muted/50'
+							: ''}"
+						onclick={() => (selected = e)}
+					>
+						<div class="flex items-start justify-between gap-2">
+							<span class="font-mono text-sm break-all">{e.action}</span>
+							<span class="shrink-0 font-mono text-[10px] whitespace-nowrap text-muted-foreground">
+								{formatDateTime(e.createdAt)}
+							</span>
+						</div>
+						<div class="text-xs text-muted-foreground">
+							{e.entityType}
+							{#if e.actorUserId}
+								<span class="text-muted-foreground/70"> · by {e.actorUserId.slice(0, 8)}…</span>
+							{:else}
+								<span class="italic"> · system</span>
+							{/if}
+						</div>
+					</button>
+				</li>
+			{/each}
+		</ul>
 
 		<footer class="flex items-center justify-between text-sm">
 			<p class="text-muted-foreground">

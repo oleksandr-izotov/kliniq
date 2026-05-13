@@ -16,7 +16,7 @@
 	}
 </script>
 
-<main class="min-h-screen bg-background p-6">
+<main class="min-h-screen bg-background p-4 sm:p-6">
 	<div class="mx-auto w-full max-w-7xl space-y-6">
 		<header class="space-y-3">
 			<a href="/" class="text-sm text-muted-foreground hover:text-foreground">← Back to home</a>

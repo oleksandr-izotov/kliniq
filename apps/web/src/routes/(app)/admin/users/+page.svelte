@@ -232,7 +232,13 @@
 			{listError}
 		</p>
 	{:else if page}
-		<div class="overflow-x-auto rounded-2xl border">
+		<!--
+			Desktop table — hidden on phones because 5 columns × (select + chip
+			+ checkbox + select + button) overflow the viewport. Same column
+			set + interactions on the mobile card list below; admin users
+			should be able to do the full role/surgeon/status flow on a phone.
+		-->
+		<div class="hidden overflow-x-auto rounded-2xl border md:block">
 			<table class="w-full text-sm">
 				<thead class="bg-muted/40 text-left text-xs text-muted-foreground uppercase">
 					<tr>
@@ -329,6 +335,92 @@
 				</tbody>
 			</table>
 		</div>
+
+		<!-- Mobile cards — same rows, vertical layout -->
+		<ul class="space-y-3 md:hidden">
+			{#each page.items as u (u.id)}
+				{@const isSelf = u.id === data.user.id}
+				{@const isPending = pendingId === u.id}
+				<li class="space-y-3 rounded-2xl border p-4" class:opacity-60={isPending}>
+					<div class="flex items-start justify-between gap-3">
+						<div class="min-w-0 space-y-0.5">
+							<div class="truncate font-medium">
+								{u.displayName}
+								{#if isSelf}
+									<span class="text-xs text-muted-foreground">(you)</span>
+								{/if}
+							</div>
+							<div class="truncate text-xs text-muted-foreground">{u.email}</div>
+						</div>
+						<span
+							class="shrink-0 rounded-full border px-2 py-0.5 text-[10px] tracking-wide uppercase {statusBadge(
+								u.status
+							)}"
+						>
+							{u.status.toLowerCase()}
+						</span>
+					</div>
+
+					<div class="space-y-2 text-sm">
+						<label class="flex flex-col gap-1">
+							<span class="text-xs text-muted-foreground">Role</span>
+							<select
+								value={u.role}
+								onchange={(e) =>
+									changeRole(u, (e.currentTarget as HTMLSelectElement).value as AdminUserRole)}
+								disabled={isPending}
+								class="h-9 rounded-md border border-input bg-background px-2 text-sm"
+							>
+								<option value="ADMIN">Admin</option>
+								<option value="MANAGER">Manager</option>
+								<option value="STAFF">Staff</option>
+							</select>
+						</label>
+
+						<label class="flex items-center gap-2">
+							<input
+								type="checkbox"
+								checked={u.isSurgeon}
+								disabled={isPending}
+								onchange={(e) => toggleSurgeon(u, (e.currentTarget as HTMLInputElement).checked)}
+								class="h-4 w-4"
+							/>
+							<span class="text-sm">Surgeon</span>
+						</label>
+
+						{#if u.isSurgeon}
+							<label class="flex flex-col gap-1">
+								<span class="text-xs text-muted-foreground">Specialty</span>
+								<select
+									value={u.specialty ?? 'GENERAL'}
+									onchange={(e) =>
+										changeSpecialty(
+											u,
+											(e.currentTarget as HTMLSelectElement).value as AdminUserSpecialty
+										)}
+									disabled={isPending}
+									class="h-9 rounded-md border border-input bg-background px-2 text-sm"
+								>
+									{#each SPECIALTIES as s (s)}
+										<option value={s}>{s.toLowerCase()}</option>
+									{/each}
+								</select>
+							</label>
+						{/if}
+					</div>
+
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => toggleStatus(u)}
+						disabled={isPending}
+						class="w-full"
+					>
+						{u.status === 'ACTIVE' ? 'Disable' : 'Re-enable'}
+					</Button>
+				</li>
+			{/each}
+		</ul>
 
 		<footer class="flex items-center justify-between text-sm">
 			<p class="text-muted-foreground">
