@@ -12,6 +12,7 @@
 		type InvitationDto
 	} from '$lib/api/admin/invitations';
 	import type { AdminUserRole, AdminUserSpecialty } from '$lib/api/admin/users';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 
 	const SPECIALTIES: ReadonlyArray<AdminUserSpecialty> = [
 		'CARDIOLOGY',
@@ -252,8 +253,12 @@
 			</p>
 		{:else if invitations.length === 0}
 			<Card.Root class="rounded-2xl">
-				<Card.Content class="px-6 py-8 text-center text-sm text-muted-foreground">
-					No invitations to show.
+				<Card.Content class="px-2 py-4">
+					<EmptyState
+						image="/illustrations/empty-users.webp"
+						title="No invitations yet"
+						description="Invite your first teammate — pick a role and surgeon flag above, then send the email."
+					/>
 				</Card.Content>
 			</Card.Root>
 		{:else}

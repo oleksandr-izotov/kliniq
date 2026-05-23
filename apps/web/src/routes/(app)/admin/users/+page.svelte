@@ -13,6 +13,7 @@
 		type AdminUserSpecialty,
 		type AdminUserStatus
 	} from '$lib/api/admin/users';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -231,6 +232,14 @@
 		>
 			{listError}
 		</p>
+	{:else if page && page.items.length === 0}
+		<div class="rounded-2xl border">
+			<EmptyState
+				image="/illustrations/empty-users.webp"
+				title="No users match these filters"
+				description="Reset the filters above, or invite someone via the Invitations tab."
+			/>
+		</div>
 	{:else if page}
 		<!--
 			Desktop table — hidden on phones because 5 columns × (select + chip

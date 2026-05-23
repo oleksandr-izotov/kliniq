@@ -5,6 +5,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { ApiError_ } from '$lib/auth/api';
 	import { adminAuditApi, type AuditEventDto, type AuditEventPageDto } from '$lib/api/admin/audit';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 
 	const PAGE_SIZE = 50;
 
@@ -148,6 +149,15 @@
 		>
 			{listError}
 		</p>
+	{:else if page && page.items.length === 0}
+		<div class="rounded-2xl border">
+			<EmptyState
+				image="/illustrations/empty-bookings.webp"
+				title="No audit events match these filters"
+				description="Adjust or clear the filters above to see more activity."
+				size="sm"
+			/>
+		</div>
 	{:else if page}
 		<!-- Desktop table -->
 		<div class="hidden overflow-x-auto rounded-2xl border md:block">

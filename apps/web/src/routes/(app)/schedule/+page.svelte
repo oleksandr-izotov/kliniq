@@ -24,6 +24,7 @@
 	} from '$lib/util/eventSource';
 	import BookingFormDialog from '$lib/components/bookings/BookingFormDialog.svelte';
 	import BookingSidePanel from '$lib/components/bookings/BookingSidePanel.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 
 	const PIXELS_PER_MINUTE = 1.2; // 60 min ≈ 72px row height
 	const SLOT_MINUTES = 30;
@@ -168,6 +169,13 @@
 	});
 
 	const tz = $derived(view === 'week' ? weekSchedule?.timezone : schedule?.timezone);
+
+	// Total bookings across all rooms for the visible day. Drives the empty-state
+	// overlay: when zero, the grid still renders (slots stay clickable / drop
+	// targets) but a branded illustration floats over it as a "what next" hint.
+	const dayBookingCount = $derived(
+		schedule ? schedule.operatingRooms.reduce((n, or) => n + or.bookings.length, 0) : 0
+	);
 
 	function bookingTop(b: BookingDto): number {
 		const zone = tz;
@@ -521,90 +529,108 @@
 				min-w-max horizontal-scroll layout which forced phones into a
 				horizontal-scroll-of-shame.
 			-->
-			<div
-				class="grid grid-cols-1 gap-4 lg:[grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]"
-			>
-				{#each schedule.operatingRooms as or (or.id)}
-					<article class="overflow-hidden rounded-2xl border">
-						<header
-							class="flex h-14 flex-col items-center justify-center border-b border-border bg-muted/40 px-2"
-						>
-							<span class="font-mono text-xs text-muted-foreground">{or.code}</span>
-							<span class="truncate text-sm font-medium">{or.name}</span>
-							{#if or.status !== 'ACTIVE'}
-								<span class="rounded bg-muted px-1 text-[10px] text-muted-foreground uppercase">
-									{or.status}
-								</span>
-							{/if}
-						</header>
-						<div class="flex">
-							<!-- Time gutter -->
-							<div class="w-12 shrink-0 border-r bg-muted/40 sm:w-16">
-								<div class="relative" style:height="{totalPx}px">
+			<div class="relative">
+				{#if dayBookingCount === 0}
+					<!--
+						No bookings for this day. The grid below still renders so every
+						slot stays clickable / a drop target — this illustration floats
+						over it as a hint and is click-through (pointer-events-none).
+					-->
+					<div class="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-8">
+						<div class="rounded-3xl bg-background/80 px-4 py-2 shadow-sm backdrop-blur-sm">
+							<EmptyState
+								image="/illustrations/empty-bookings.webp"
+								title="No bookings on {date}"
+								description="Click an empty slot to book, or drag a card here from another day."
+							/>
+						</div>
+					</div>
+				{/if}
+				<div
+					class="grid grid-cols-1 gap-4 lg:[grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]"
+				>
+					{#each schedule.operatingRooms as or (or.id)}
+						<article class="overflow-hidden rounded-2xl border">
+							<header
+								class="flex h-14 flex-col items-center justify-center border-b border-border bg-muted/40 px-2"
+							>
+								<span class="font-mono text-xs text-muted-foreground">{or.code}</span>
+								<span class="truncate text-sm font-medium">{or.name}</span>
+								{#if or.status !== 'ACTIVE'}
+									<span class="rounded bg-muted px-1 text-[10px] text-muted-foreground uppercase">
+										{or.status}
+									</span>
+								{/if}
+							</header>
+							<div class="flex">
+								<!-- Time gutter -->
+								<div class="w-12 shrink-0 border-r bg-muted/40 sm:w-16">
+									<div class="relative" style:height="{totalPx}px">
+										{#each hourTicks as t (t.minute)}
+											<div
+												class="absolute -translate-y-1/2 px-2 text-right text-xs text-muted-foreground"
+												style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px"
+											>
+												{t.label}
+											</div>
+										{/each}
+									</div>
+								</div>
+								<!-- svelte-ignore a11y_click_events_have_key_events -->
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
+								<div
+									class="relative flex-1 cursor-cell hover:bg-muted/30 {dragOverOrId === or.id
+										? 'ring-2 ring-primary/40 ring-inset'
+										: ''}"
+									style:height="{totalPx}px"
+									onclick={(e) => openCreate(or.id, date, e)}
+									ondragover={(e) => handleSlotDragOver(e, or.id)}
+									ondragleave={() => handleSlotDragLeave(or.id)}
+									ondrop={(e) => handleSlotDrop(e, or.id)}
+									aria-label="Create booking in {or.code}"
+								>
+									<!-- Hour grid lines -->
 									{#each hourTicks as t (t.minute)}
 										<div
-											class="absolute -translate-y-1/2 px-2 text-right text-xs text-muted-foreground"
+											class="pointer-events-none absolute right-0 left-0 border-t border-border/50"
 											style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px"
+										></div>
+									{/each}
+									<!-- Booking blocks -->
+									{#each or.bookings as b (b.id)}
+										{@const canDrag = b.status === 'SCHEDULED' || b.status === 'IN_PROGRESS'}
+										<button
+											type="button"
+											class="absolute right-1 left-1 cursor-pointer rounded border px-2 py-1 text-left text-xs shadow-sm {statusColor(
+												b.status
+											)} {selectedBooking?.id === b.id ? 'ring-2 ring-primary' : ''} {draggingId ===
+											b.id
+												? 'opacity-50'
+												: ''}"
+											style:top="{bookingTop(b)}px"
+											style:height="{bookingHeight(b)}px"
+											draggable={canDrag}
+											ondragstart={(e) => handleBookingDragStart(e, b)}
+											ondragend={handleBookingDragEnd}
+											onclick={(e) => {
+												e.stopPropagation();
+												selectBooking(b);
+											}}
 										>
-											{t.label}
-										</div>
+											<span class="block font-medium">
+												{formatLocalTime(b.startsAt, schedule.timezone)}–{formatLocalTime(
+													b.endsAt,
+													schedule.timezone
+												)}
+											</span>
+											<span class="block truncate text-muted-foreground">{b.opType}</span>
+										</button>
 									{/each}
 								</div>
 							</div>
-							<!-- svelte-ignore a11y_click_events_have_key_events -->
-							<!-- svelte-ignore a11y_no_static_element_interactions -->
-							<div
-								class="relative flex-1 cursor-cell hover:bg-muted/30 {dragOverOrId === or.id
-									? 'ring-2 ring-primary/40 ring-inset'
-									: ''}"
-								style:height="{totalPx}px"
-								onclick={(e) => openCreate(or.id, date, e)}
-								ondragover={(e) => handleSlotDragOver(e, or.id)}
-								ondragleave={() => handleSlotDragLeave(or.id)}
-								ondrop={(e) => handleSlotDrop(e, or.id)}
-								aria-label="Create booking in {or.code}"
-							>
-								<!-- Hour grid lines -->
-								{#each hourTicks as t (t.minute)}
-									<div
-										class="pointer-events-none absolute right-0 left-0 border-t border-border/50"
-										style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px"
-									></div>
-								{/each}
-								<!-- Booking blocks -->
-								{#each or.bookings as b (b.id)}
-									{@const canDrag = b.status === 'SCHEDULED' || b.status === 'IN_PROGRESS'}
-									<button
-										type="button"
-										class="absolute right-1 left-1 cursor-pointer rounded border px-2 py-1 text-left text-xs shadow-sm {statusColor(
-											b.status
-										)} {selectedBooking?.id === b.id ? 'ring-2 ring-primary' : ''} {draggingId ===
-										b.id
-											? 'opacity-50'
-											: ''}"
-										style:top="{bookingTop(b)}px"
-										style:height="{bookingHeight(b)}px"
-										draggable={canDrag}
-										ondragstart={(e) => handleBookingDragStart(e, b)}
-										ondragend={handleBookingDragEnd}
-										onclick={(e) => {
-											e.stopPropagation();
-											selectBooking(b);
-										}}
-									>
-										<span class="block font-medium">
-											{formatLocalTime(b.startsAt, schedule.timezone)}–{formatLocalTime(
-												b.endsAt,
-												schedule.timezone
-											)}
-										</span>
-										<span class="block truncate text-muted-foreground">{b.opType}</span>
-									</button>
-								{/each}
-							</div>
-						</div>
-					</article>
-				{/each}
+						</article>
+					{/each}
+				</div>
 			</div>
 
 			{#if scheduleLoading}

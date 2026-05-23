@@ -7,6 +7,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { ApiError_ } from '$lib/auth/api';
 	import { operatingRoomsApi, type OperatingRoomDto } from '$lib/api/operatingRooms';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -248,11 +249,14 @@
 				</p>
 			{:else if rooms.length === 0}
 				<Card.Root class="rounded-2xl">
-					<Card.Content class="px-6 py-8 text-center text-sm text-muted-foreground">
-						No operating rooms yet.
-						{#if isManager}
-							Add the first one above.
-						{/if}
+					<Card.Content class="px-2 py-4">
+						<EmptyState
+							image="/illustrations/empty-rooms.webp"
+							title="No operating rooms yet"
+							description={isManager
+								? 'Add your first operating room using the form above to start scheduling.'
+								: 'No operating rooms have been set up yet. Ask a manager to add one.'}
+						/>
 					</Card.Content>
 				</Card.Root>
 			{:else}
