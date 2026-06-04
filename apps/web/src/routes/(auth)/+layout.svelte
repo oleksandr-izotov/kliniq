@@ -16,44 +16,37 @@
 	panel, vertically centered, scrolls only if the form content overflows.
 -->
 <div class="grid bg-background lg:h-screen lg:grid-cols-2 lg:overflow-hidden">
-	<!-- Brand panel — desktop only -->
-	<aside class="relative hidden bg-muted lg:block">
-		<!--
-			`<picture>` with `media="(min-width: 1024px)"` gates the network
-			fetch behind the same breakpoint that toggles `lg:block`. On
-			mobile the source doesn't match, browsers fall through to the
-			tiny inline-SVG `<img>` (≈100 bytes), and we save 1 MB on the
-			critical-path. The WebP source then knocks the desktop fetch
-			down 30× (1.06 MB → 35 KB) without touching visual fidelity.
-		-->
-		<picture>
-			<source
-				media="(min-width: 1024px)"
-				type="image/webp"
-				srcset="/illustrations/login-side.webp"
-			/>
-			<source media="(min-width: 1024px)" type="image/png" srcset="/illustrations/login-side.png" />
-			<img
-				src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%2F%3E"
-				alt=""
-				class="absolute inset-0 h-full w-full object-cover"
-				width="1200"
-				height="1200"
-				decoding="async"
-			/>
-		</picture>
+	<!-- Brand panel — desktop only. Theme-aware schedule illustration with a
+		logo top-left and a tagline bottom over a protection gradient. -->
+	<aside class="relative hidden overflow-hidden bg-muted lg:block">
+		<img
+			src="/illustrations/auth-light.webp"
+			alt=""
+			class="absolute inset-0 h-full w-full object-cover dark:hidden"
+			decoding="async"
+			aria-hidden="true"
+		/>
+		<img
+			src="/illustrations/auth-dark.webp"
+			alt=""
+			class="absolute inset-0 hidden h-full w-full object-cover dark:block"
+			decoding="async"
+			aria-hidden="true"
+		/>
+		<!-- Emerald wash to tie the art to the brand -->
+		<div class="absolute inset-0 bg-primary/10 mix-blend-multiply dark:mix-blend-screen"></div>
 
 		<!-- Logo, top-left corner overlay -->
-		<header class="absolute top-8 left-8 flex items-center gap-2">
-			<img src="/icon.svg" alt="Kliniq logo" class="h-9 w-9 rounded-lg shadow-sm" />
-			<span class="text-xl font-bold tracking-tight text-foreground">kliniq</span>
+		<header class="absolute top-8 left-8 z-10 flex items-center gap-2.5">
+			<img src="/brand/kliniq-icon.svg" alt="Kliniq logo" class="brand-glow size-9 rounded-[9px]" />
+			<span class="text-xl font-bold tracking-[-0.03em] text-foreground">Kliniq</span>
 		</header>
 
-		<!-- Tagline, bottom overlay with a gentle gradient so it stays readable -->
+		<!-- Tagline, bottom overlay with a protection gradient so it stays readable -->
 		<div
-			class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/85 to-transparent px-12 pt-32 pb-10"
+			class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-background via-background/80 to-transparent px-12 pt-32 pb-10"
 		>
-			<p class="text-lg leading-snug font-medium text-foreground">Scheduling for modern clinics.</p>
+			<p class="t-h2 font-semibold text-foreground">Scheduling for modern clinics.</p>
 			<p class="mt-1 text-sm text-muted-foreground">
 				Bookings, schedules, and audit trails in one place.
 			</p>
@@ -62,14 +55,16 @@
 
 	<!-- Form panel -->
 	<main class="relative flex items-center justify-center overflow-y-auto p-6 lg:p-12">
-		<div class="absolute top-4 right-4">
+		<!-- Ambient aurora behind the form (subtle) -->
+		<div class="aurora" aria-hidden="true"></div>
+		<div class="absolute top-4 right-4 z-10">
 			<ModeToggle />
 		</div>
-		<div class="w-full max-w-lg">
+		<div class="relative z-10 w-full max-w-sm">
 			<!-- Mobile-only logo (the brand panel is hidden < lg) -->
-			<div class="mb-8 flex items-center gap-2 lg:hidden">
-				<img src="/icon.svg" alt="Kliniq" class="h-8 w-8 rounded-md" />
-				<span class="text-lg font-bold tracking-tight text-foreground">kliniq</span>
+			<div class="mb-8 flex items-center gap-2.5 lg:hidden">
+				<img src="/brand/kliniq-icon.svg" alt="Kliniq" class="brand-glow size-8 rounded-lg" />
+				<span class="text-lg font-bold tracking-[-0.03em] text-foreground">Kliniq</span>
 			</div>
 			{@render children()}
 		</div>

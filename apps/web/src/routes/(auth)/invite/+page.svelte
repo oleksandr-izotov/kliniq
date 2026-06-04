@@ -120,7 +120,7 @@
 	<title>Accept invitation · Kliniq</title>
 </svelte:head>
 
-<Card.Root class="rounded-2xl">
+<Card.Root class="rounded-[24px] border-border/40 p-2 shadow-2xl">
 	<Card.Header class="space-y-2 px-6 pt-6">
 		<Card.Title class="text-2xl font-bold tracking-tight">Accept invitation</Card.Title>
 		{#if preview}
@@ -189,7 +189,7 @@
 					</p>
 				{/if}
 
-				<Button type="submit" disabled={submitting}>
+				<Button type="submit" class="cta-gradient" disabled={submitting}>
 					{submitting ? 'Creating account…' : 'Create account & sign in'}
 				</Button>
 			</form>

@@ -155,7 +155,7 @@
 
 <div class="mx-auto w-full max-w-4xl space-y-6">
 	<header class="space-y-1">
-		<h1 class="text-3xl font-bold tracking-tight">Invitations</h1>
+		<h1 class="t-h1">Invitations</h1>
 		<p class="text-sm text-muted-foreground">
 			Issue email-based invitations with a pre-set role and surgeon flag. The recipient picks their
 			own password on the accept page; the new account lands verified, no separate email round-trip.

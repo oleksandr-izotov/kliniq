@@ -228,7 +228,7 @@
 	bind:this={dlg}
 	oncancel={onCancel}
 	onclose={onCancel}
-	class="h-full max-h-screen w-full rounded-none bg-background p-0 text-foreground shadow-xl backdrop:bg-black/40 sm:h-auto sm:max-h-[90vh] sm:max-w-xl sm:rounded-2xl"
+	class="h-full max-h-screen w-full rounded-none bg-background p-0 text-foreground shadow-2xl backdrop:bg-black/40 backdrop:backdrop-blur-sm sm:h-auto sm:max-h-[90vh] sm:max-w-xl sm:rounded-2xl"
 >
 	<form onsubmit={submit} class="space-y-4 p-6" novalidate>
 		<header class="space-y-1">
@@ -352,7 +352,7 @@
 
 		<footer class="flex justify-end gap-2">
 			<Button type="button" variant="outline" onclick={close} disabled={submitting}>Cancel</Button>
-			<Button type="submit" disabled={submitting}>
+			<Button type="submit" class="cta-gradient" disabled={submitting}>
 				{#if submitting}
 					Saving…
 				{:else}

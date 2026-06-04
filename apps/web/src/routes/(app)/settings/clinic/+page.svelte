@@ -125,11 +125,10 @@
 	<title>Clinic settings · Kliniq</title>
 </svelte:head>
 
-<main class="min-h-screen bg-background p-4 sm:p-6">
+<div class="contents">
 	<div class="mx-auto w-full max-w-2xl space-y-6">
 		<header class="space-y-1">
-			<a href="/" class="text-sm text-muted-foreground hover:text-foreground">← Back to home</a>
-			<h1 class="text-3xl font-bold tracking-tight">Clinic settings</h1>
+			<h1 class="t-h1">Clinic settings</h1>
 			<p class="text-sm text-muted-foreground">
 				{#if isAdmin}
 					These values shape every booking: timezone is used to validate working hours, and the
@@ -242,4 +241,4 @@
 			</Card.Root>
 		{/if}
 	</div>
-</main>
+</div>

@@ -198,11 +198,10 @@
 	<title>Security · Kliniq</title>
 </svelte:head>
 
-<main class="min-h-screen bg-background p-4 sm:p-6">
+<div class="contents">
 	<div class="mx-auto w-full max-w-2xl space-y-6">
 		<header class="space-y-1">
-			<a href="/" class="text-sm text-muted-foreground hover:text-foreground">← Back to home</a>
-			<h1 class="text-3xl font-bold tracking-tight">Security</h1>
+			<h1 class="t-h1">Security</h1>
 			<p class="text-sm text-muted-foreground">
 				Manage how you sign in. Changing your password signs out every other device automatically.
 			</p>
@@ -397,4 +396,4 @@
 			{/if}
 		</section>
 	</div>
-</main>
+</div>

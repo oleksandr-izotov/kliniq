@@ -95,7 +95,7 @@
 	<title>Sign in · Kliniq</title>
 </svelte:head>
 
-<Card.Root class="rounded-2xl border-border/40 p-2 shadow-2xl">
+<Card.Root class="rounded-[24px] border-border/40 p-2 shadow-2xl">
 	<Card.Header class="space-y-2 px-6 pt-6">
 		<Card.Title class="text-3xl font-bold tracking-tight">Sign in</Card.Title>
 		<Card.Description class="text-base">
@@ -143,7 +143,7 @@
 				</p>
 			{/if}
 
-			<Button type="submit" class="w-full" disabled={submitting || passkeySubmitting}>
+			<Button type="submit" class="cta-gradient w-full" disabled={submitting || passkeySubmitting}>
 				{submitting ? 'Signing in…' : 'Sign in'}
 			</Button>
 

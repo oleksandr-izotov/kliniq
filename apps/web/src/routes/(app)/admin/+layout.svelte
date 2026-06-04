@@ -16,10 +16,9 @@
 	}
 </script>
 
-<main class="min-h-screen bg-background p-4 sm:p-6">
+<div class="contents">
 	<div class="mx-auto w-full max-w-7xl space-y-6">
 		<header class="space-y-3">
-			<a href="/" class="text-sm text-muted-foreground hover:text-foreground">← Back to home</a>
 			<nav class="border-b" aria-label="Admin sections">
 				<ul class="-mb-px flex gap-1">
 					{#each tabs as tab (tab.href)}
@@ -44,4 +43,4 @@
 
 		{@render children?.()}
 	</div>
-</main>
+</div>

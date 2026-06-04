@@ -28,9 +28,7 @@
 	const cta = $derived(
 		status === 401 ? { href: '/login', label: 'Sign in' } : { href: '/', label: 'Back to home' }
 	);
-	const illustration = $derived(
-		status >= 500 ? '/illustrations/error-500.png' : '/illustrations/error-404.png'
-	);
+	const isServerError = $derived(status >= 500);
 </script>
 
 <svelte:head>
@@ -38,39 +36,96 @@
 </svelte:head>
 
 <!--
-	Full-bleed illustration as hero background; text + CTA float over it in
-	a frosted card so the line-art (especially the green door at the
-	composition's centre) reads through behind the type. The illustration
-	is light-only — colours are pinned to slate / emerald rather than the
-	theme-aware tokens so the layout stays legible regardless of the
-	user's dark/light preference.
+	Pure-CSS error scene (no raster): a giant glowing status code with floating
+	glass "schedule blocks" that gently bob over a radial emerald glow. Fully
+	theme-aware via the design tokens; motion respects prefers-reduced-motion.
 -->
-<main class="relative grid min-h-screen place-items-center overflow-hidden bg-stone-50">
-	<img
-		src={illustration}
-		alt=""
-		class="absolute inset-0 h-full w-full object-cover"
-		decoding="async"
-		aria-hidden="true"
-	/>
+<main
+	class="relative grid min-h-screen place-items-center overflow-hidden bg-background px-6 text-foreground"
+>
+	<div class="aurora" aria-hidden="true"></div>
 
-	<!-- Logo top-left, on top of the illustration -->
-	<header class="absolute top-6 left-6 z-10 flex items-center gap-2">
-		<img src="/icon.svg" alt="Kliniq logo" class="h-9 w-9 rounded-lg shadow-sm" />
-		<span class="text-xl font-bold tracking-tight text-slate-900">kliniq</span>
+	<!-- Logo top-left -->
+	<header class="absolute top-6 left-6 z-10 flex items-center gap-2.5">
+		<img src="/brand/kliniq-icon.svg" alt="Kliniq logo" class="brand-glow size-9 rounded-[9px]" />
+		<span class="text-xl font-bold tracking-[-0.03em]">Kliniq</span>
 	</header>
 
-	<!-- Frosted-glass text card, vertically centred -->
-	<div
-		class="relative z-10 mx-6 w-full max-w-md space-y-5 rounded-3xl border border-white/40 bg-white/80 p-8 text-center shadow-2xl backdrop-blur-md"
-	>
-		<p class="text-xs font-semibold tracking-widest text-emerald-600 uppercase">
+	<!-- Floating glass schedule-blocks (decorative) -->
+	<div class="pointer-events-none absolute inset-0 hidden sm:block" aria-hidden="true">
+		<div class="float-block glass top-[24%] left-[14%] [animation-delay:0s]">
+			<span class="block h-2 w-10 rounded-full bg-primary/40"></span>
+			<span class="mt-1.5 block h-1.5 w-16 rounded-full bg-foreground/15"></span>
+		</div>
+		<div class="float-block glass top-[20%] right-[16%] [animation-delay:-1.6s]">
+			<span class="block h-2 w-8 rounded-full bg-amber-500/50"></span>
+			<span class="mt-1.5 block h-1.5 w-14 rounded-full bg-foreground/15"></span>
+		</div>
+		<div class="float-block glass bottom-[18%] left-[20%] [animation-delay:-3.1s]">
+			<span class="block h-2 w-12 rounded-full bg-primary/40"></span>
+			<span class="mt-1.5 block h-1.5 w-12 rounded-full bg-foreground/15"></span>
+		</div>
+		<div class="float-block glass right-[20%] bottom-[22%] [animation-delay:-2.2s]">
+			<span class="block h-2 w-9 rounded-full bg-foreground/25"></span>
+			<span class="mt-1.5 block h-1.5 w-16 rounded-full bg-foreground/15"></span>
+		</div>
+	</div>
+
+	<!-- Centerpiece -->
+	<div class="relative z-10 flex max-w-md flex-col items-center text-center">
+		<p class="t-mono mb-2 text-xs font-semibold tracking-[0.2em] text-primary uppercase">
 			Error {status}
 		</p>
-		<h1 class="text-4xl font-bold tracking-tight text-slate-900">{title}</h1>
-		<p class="text-base leading-relaxed text-slate-600">{blurb}</p>
-		<div class="pt-2">
-			<Button href={cta.href} size="lg">{cta.label} →</Button>
+		<div class="code-number select-none">{status}</div>
+		<h1 class="t-h1 mt-2">{title}</h1>
+		<p class="mt-3 text-base leading-relaxed text-muted-foreground">{blurb}</p>
+		<div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+			<Button href={cta.href} size="lg" class="cta-gradient">{cta.label} →</Button>
+			{#if isServerError}
+				<Button variant="outline" size="lg" onclick={() => location.reload()}>Try again</Button>
+			{/if}
 		</div>
 	</div>
 </main>
+
+<style>
+	.code-number {
+		font-weight: 800;
+		font-size: clamp(6rem, 22vw, 11rem);
+		line-height: 0.9;
+		letter-spacing: -0.04em;
+		background: linear-gradient(
+			135deg,
+			var(--primary),
+			color-mix(in oklch, var(--primary) 55%, var(--foreground))
+		);
+		-webkit-background-clip: text;
+		background-clip: text;
+		-webkit-text-fill-color: transparent;
+		filter: drop-shadow(0 8px 30px color-mix(in oklch, var(--primary) 35%, transparent));
+	}
+	:global(.dark) .code-number {
+		filter: drop-shadow(0 0 40px color-mix(in oklch, var(--primary) 55%, transparent));
+	}
+	.float-block {
+		position: absolute;
+		padding: 10px 12px;
+		border-radius: 12px;
+		box-shadow: var(--shadow-lg);
+		animation: bob 6s ease-in-out infinite;
+	}
+	@keyframes bob {
+		0%,
+		100% {
+			transform: translateY(0) rotate(-2deg);
+		}
+		50% {
+			transform: translateY(-14px) rotate(2deg);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.float-block {
+			animation: none;
+		}
+	}
+</style>

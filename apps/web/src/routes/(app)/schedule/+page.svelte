@@ -25,9 +25,15 @@
 	import BookingFormDialog from '$lib/components/bookings/BookingFormDialog.svelte';
 	import BookingSidePanel from '$lib/components/bookings/BookingSidePanel.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
+	import ModeToggle from '$lib/components/ModeToggle.svelte';
+	import PlusIcon from '@lucide/svelte/icons/plus';
+	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
+	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 
 	const PIXELS_PER_MINUTE = 1.2; // 60 min ≈ 72px row height
 	const SLOT_MINUTES = 30;
+	const HEADER_PX = 56; // sticky column-header row height (matches CSS)
+	const COMPACT_PX = 70; // blocks shorter than this hide their footer
 
 	let clinic = $state<ClinicSettingsDto | null>(null);
 	let rooms = $state<readonly OperatingRoomDto[]>([]);
@@ -190,19 +196,6 @@
 		const s = localMinutesOfDay(b.startsAt, zone);
 		const e = localMinutesOfDay(b.endsAt, zone);
 		return Math.max(20, (e - s) * PIXELS_PER_MINUTE);
-	}
-
-	function statusColor(status: BookingDto['status']): string {
-		switch (status) {
-			case 'SCHEDULED':
-				return 'bg-primary/15 border-primary/40 text-foreground';
-			case 'IN_PROGRESS':
-				return 'bg-amber-500/20 border-amber-500/50 text-foreground';
-			case 'COMPLETED':
-				return 'bg-emerald-500/15 border-emerald-500/40 text-muted-foreground';
-			case 'CANCELLED':
-				return 'bg-muted border-border text-muted-foreground line-through';
-		}
 	}
 
 	// ---- Drag-drop reschedule -------------------------------------------
@@ -391,35 +384,87 @@
 		selectedBooking = b;
 		void loadSchedule();
 	}
+
+	// ---- Live "now" indicator -------------------------------------------
+	// Ticks once a minute; drives the dashed now-line + its time tag. Only
+	// shown when the visible day is *today* in the clinic zone.
+	let nowMs = $state(Date.now());
+	onMount(() => {
+		const id = setInterval(() => (nowMs = Date.now()), 60_000);
+		return () => clearInterval(id);
+	});
+
+	const nowMin = $derived(tz ? localMinutesOfDay(new Date(nowMs).toISOString(), tz) : 0);
+	const today = $derived(clinic ? todayInZone(clinic.timezone) : '');
+	const showNow = $derived(!!tz && nowMin >= startMin && nowMin <= endMin);
+	const nowLabel = $derived(
+		`${Math.floor(nowMin / 60)
+			.toString()
+			.padStart(2, '0')}:${(nowMin % 60).toString().padStart(2, '0')}`
+	);
+	// Crumb date: long, readable; week shows the range start.
+	const crumbDate = $derived(view === 'week' ? `Week of ${weekFrom}` : date);
+
+	// ---- Surgeon / status display helpers --------------------------------
+	function surgeonName(id: string): string {
+		return surgeons.find((s) => s.id === id)?.displayName ?? 'Unknown';
+	}
+	function initialsOf(name: string): string {
+		return (
+			name
+				.split(/\s+/)
+				.filter(Boolean)
+				.slice(0, 2)
+				.map((p) => p[0]?.toUpperCase() ?? '')
+				.join('') || '?'
+		);
+	}
+	function statusLabel(s: BookingDto['status']): string {
+		return s.replace('_', ' ');
+	}
+
+	// Toolbar "New booking" — opens create prefilled with a sensible default
+	// slot (now, snapped) on the visible OR/day.
+	function openCreateCta() {
+		if (!clinic || rooms.length === 0) return;
+		const base = showNow ? Math.round(nowMin / SLOT_MINUTES) * SLOT_MINUTES : startMin;
+		const time = `${Math.floor(base / 60)
+			.toString()
+			.padStart(2, '0')}:${(base % 60).toString().padStart(2, '0')}`;
+		dialogPrefill = {
+			date: view === 'week' ? weekFrom : date,
+			time,
+			operatingRoomId: view === 'week' ? (weekOrId ?? rooms[0].id) : rooms[0].id
+		};
+		dialogExisting = undefined;
+		dialogMode = 'create';
+		dialogOpen = true;
+	}
 </script>
 
 <svelte:head>
 	<title>Schedule · Kliniq</title>
 </svelte:head>
 
-<main class="min-h-screen bg-background p-4 sm:p-6">
+<div class="contents">
 	<div class="mx-auto w-full max-w-7xl space-y-4">
-		<header class="flex flex-wrap items-end justify-between gap-3">
+		<header class="flex flex-wrap items-start justify-between gap-3">
 			<div class="space-y-1">
-				<a href="/" class="text-sm text-muted-foreground hover:text-foreground">← Back to home</a>
-				<h1 class="text-3xl font-bold tracking-tight">Schedule</h1>
+				<h1 class="t-h1">Schedule</h1>
 				{#if clinic}
-					<p class="text-sm text-muted-foreground">
-						{clinic.name} · {clinic.timezone} · working {clinic.workingHoursStart.slice(
-							0,
-							5
-						)}–{clinic.workingHoursEnd.slice(0, 5)}
+					<p class="t-mono text-xs text-muted-foreground">
+						{clinic.name} · {crumbDate} · {clinic.timezone}
 					</p>
 				{/if}
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
-				<!-- View toggle -->
-				<div class="flex overflow-hidden rounded-md border border-input">
+				<!-- Day / Week segmented control -->
+				<div class="inline-flex rounded-[10px] bg-muted p-[3px]" role="group" aria-label="View">
 					<button
 						type="button"
-						class="px-3 py-1 text-sm {view === 'day'
-							? 'bg-primary text-primary-foreground'
-							: 'bg-background hover:bg-muted'}"
+						class="rounded-[7px] px-3.5 py-1.5 text-sm font-medium transition-colors {view === 'day'
+							? 'bg-card text-foreground shadow-sm'
+							: 'text-muted-foreground hover:text-foreground'}"
 						onclick={() => setView('day')}
 						aria-pressed={view === 'day'}
 					>
@@ -427,9 +472,10 @@
 					</button>
 					<button
 						type="button"
-						class="px-3 py-1 text-sm {view === 'week'
-							? 'bg-primary text-primary-foreground'
-							: 'bg-background hover:bg-muted'}"
+						class="rounded-[7px] px-3.5 py-1.5 text-sm font-medium transition-colors {view ===
+						'week'
+							? 'bg-card text-foreground shadow-sm'
+							: 'text-muted-foreground hover:text-foreground'}"
 						onclick={() => setView('week')}
 						aria-pressed={view === 'week'}
 					>
@@ -437,69 +483,74 @@
 					</button>
 				</div>
 
-				{#if view === 'day'}
-					<Button variant="outline" size="sm" onclick={() => shiftDate(-1)} disabled={loading}>
-						← Prev
-					</Button>
-					<Input
-						type="date"
-						bind:value={date}
-						onchange={dateChanged}
-						disabled={loading}
-						class="w-36 sm:w-44"
-					/>
-					<Button variant="outline" size="sm" onclick={() => shiftDate(1)} disabled={loading}>
-						Next →
-					</Button>
-					<Button
-						variant="outline"
-						size="sm"
-						onclick={() => {
-							if (!clinic) return;
-							date = todayInZone(clinic.timezone);
-							void loadSchedule();
-						}}
-						disabled={loading}
-					>
-						Today
-					</Button>
-				{:else}
+				{#if view === 'week'}
 					<select
 						bind:value={weekOrId}
 						onchange={loadSchedule}
 						disabled={loading || rooms.length === 0}
-						class="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+						class="h-9 rounded-[10px] border border-input bg-card px-3 text-sm font-medium"
 					>
 						{#each rooms as r (r.id)}
 							<option value={r.id}>{r.code} · {r.name}</option>
 						{/each}
 					</select>
-					<Button variant="outline" size="sm" onclick={() => shiftWeek(-7)} disabled={loading}>
-						← Prev
-					</Button>
+				{/if}
+
+				<!-- Prev / date / next -->
+				<Button
+					variant="outline"
+					size="icon-sm"
+					onclick={() => (view === 'week' ? shiftWeek(-7) : shiftDate(-1))}
+					disabled={loading}
+					aria-label="Previous"
+				>
+					<ChevronLeftIcon class="size-4" />
+				</Button>
+				{#if view === 'day'}
+					<Input
+						type="date"
+						bind:value={date}
+						onchange={dateChanged}
+						disabled={loading}
+						class="h-9 w-36 sm:w-44"
+					/>
+				{:else}
 					<Input
 						type="date"
 						bind:value={weekFrom}
 						onchange={loadSchedule}
 						disabled={loading}
-						class="w-44"
+						class="h-9 w-36 sm:w-44"
 					/>
-					<Button variant="outline" size="sm" onclick={() => shiftWeek(7)} disabled={loading}>
-						Next →
-					</Button>
-					<Button
-						variant="outline"
-						size="sm"
-						onclick={() => {
-							if (!clinic) return;
-							weekFrom = todayInZone(clinic.timezone);
-							void loadSchedule();
-						}}
-						disabled={loading}
-					>
-						This week
-					</Button>
 				{/if}
+				<Button
+					variant="outline"
+					size="icon-sm"
+					onclick={() => (view === 'week' ? shiftWeek(7) : shiftDate(1))}
+					disabled={loading}
+					aria-label="Next"
+				>
+					<ChevronRightIcon class="size-4" />
+				</Button>
+				<Button
+					variant="outline"
+					size="sm"
+					onclick={() => {
+						if (!clinic) return;
+						if (view === 'week') weekFrom = todayInZone(clinic.timezone);
+						else date = todayInZone(clinic.timezone);
+						void loadSchedule();
+					}}
+					disabled={loading}
+				>
+					{view === 'week' ? 'This week' : 'Today'}
+				</Button>
+
+				<ModeToggle />
+
+				<Button class="cta-gradient gap-1.5" onclick={openCreateCta} disabled={loading}>
+					<PlusIcon class="size-4" /> New booking
+				</Button>
 			</div>
 		</header>
 
@@ -520,68 +571,56 @@
 				</p>
 			</div>
 		{:else if view === 'day' && schedule}
+			{@const ors = schedule.operatingRooms}
 			<!--
-				Day-view layout: each OR is a self-contained card with its own
-				time gutter on the left and slot column on the right. Cards lay
-				out in a CSS auto-fit grid — single column below `lg`, multi-
-				column on larger viewports (`minmax(280px, 1fr)` means
-				"as many columns as fit at ≥280 px each"). Replaces the original
-				min-w-max horizontal-scroll layout which forced phones into a
-				horizontal-scroll-of-shame.
+				Day-view: a single board — a CSS grid of [time-gutter | OR columns].
+				The gutter (sticky-left) and the OR headers (sticky-top) stay pinned
+				while the board scrolls. Columns are minmax(260px,1fr): ~3 share the
+				width, more scroll horizontally. Booking blocks are absolutely placed
+				inside each slot column by time; a dashed "now" line spans all columns.
 			-->
 			<div class="relative">
 				{#if dayBookingCount === 0}
-					<!--
-						No bookings for this day. The grid below still renders so every
-						slot stays clickable / a drop target — this illustration floats
-						over it as a hint and is click-through (pointer-events-none).
-					-->
-					<div class="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-8">
-						<div class="rounded-3xl bg-background/80 px-4 py-2 shadow-sm backdrop-blur-sm">
+					<!-- Grid still renders (slots stay clickable / drop targets); this
+						floats over it as a hint and is click-through. -->
+					<div class="pointer-events-none absolute inset-x-0 top-20 z-20 flex justify-center">
+						<div class="glass rounded-3xl px-4 py-2">
 							<EmptyState
 								image="/illustrations/empty-bookings.webp"
 								title="No bookings on {date}"
-								description="Click an empty slot to book, or drag a card here from another day."
+								description="Click an empty slot to book a procedure."
 							/>
 						</div>
 					</div>
 				{/if}
-				<div
-					class="grid grid-cols-1 gap-4 lg:[grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]"
-				>
-					{#each schedule.operatingRooms as or (or.id)}
-						<article class="overflow-hidden rounded-2xl border">
-							<header
-								class="flex h-14 flex-col items-center justify-center border-b border-border bg-muted/40 px-2"
-							>
-								<span class="font-mono text-xs text-muted-foreground">{or.code}</span>
-								<span class="truncate text-sm font-medium">{or.name}</span>
-								{#if or.status !== 'ACTIVE'}
-									<span class="rounded bg-muted px-1 text-[10px] text-muted-foreground uppercase">
-										{or.status}
-									</span>
-								{/if}
-							</header>
-							<div class="flex">
-								<!-- Time gutter -->
-								<div class="w-12 shrink-0 border-r bg-muted/40 sm:w-16">
-									<div class="relative" style:height="{totalPx}px">
-										{#each hourTicks as t (t.minute)}
-											<div
-												class="absolute -translate-y-1/2 px-2 text-right text-xs text-muted-foreground"
-												style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px"
-											>
-												{t.label}
-											</div>
-										{/each}
-									</div>
+				<div class="board glass overflow-hidden rounded-2xl">
+					<div class="board-scroll">
+						<div
+							class="sched-grid"
+							style="grid-template-columns: 56px repeat({ors.length}, minmax(260px, 1fr))"
+						>
+							<div class="axis-h"></div>
+							{#each ors as or (or.id)}
+								<div class="col-h">
+									<span class="t-mono text-[11px] text-muted-foreground">{or.code}</span>
+									<span class="truncate text-[13.5px] font-semibold">{or.name}</span>
+									{#if or.status !== 'ACTIVE'}<span class="or-pill">{or.status}</span>{/if}
 								</div>
+							{/each}
+
+							<div class="axis" style:height="{totalPx}px">
+								{#each hourTicks as t (t.minute)}
+									<span class="tk" style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px">
+										{t.label}
+									</span>
+								{/each}
+							</div>
+							{#each ors as or (or.id)}
 								<!-- svelte-ignore a11y_click_events_have_key_events -->
 								<!-- svelte-ignore a11y_no_static_element_interactions -->
 								<div
-									class="relative flex-1 cursor-cell hover:bg-muted/30 {dragOverOrId === or.id
-										? 'ring-2 ring-primary/40 ring-inset'
-										: ''}"
+									class="slots"
+									class:dragover={dragOverOrId === or.id}
 									style:height="{totalPx}px"
 									onclick={(e) => openCreate(or.id, date, e)}
 									ondragover={(e) => handleSlotDragOver(e, or.id)}
@@ -589,24 +628,25 @@
 									ondrop={(e) => handleSlotDrop(e, or.id)}
 									aria-label="Create booking in {or.code}"
 								>
-									<!-- Hour grid lines -->
 									{#each hourTicks as t (t.minute)}
 										<div
-											class="pointer-events-none absolute right-0 left-0 border-t border-border/50"
+											class="line"
 											style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px"
 										></div>
 									{/each}
-									<!-- Booking blocks -->
 									{#each or.bookings as b (b.id)}
 										{@const canDrag = b.status === 'SCHEDULED' || b.status === 'IN_PROGRESS'}
+										{@const compact = bookingHeight(b) < COMPACT_PX}
 										<button
 											type="button"
-											class="absolute right-1 left-1 cursor-pointer rounded border px-2 py-1 text-left text-xs shadow-sm {statusColor(
-												b.status
-											)} {selectedBooking?.id === b.id ? 'ring-2 ring-primary' : ''} {draggingId ===
-											b.id
-												? 'opacity-50'
-												: ''}"
+											class="bk"
+											class:SCHEDULED={b.status === 'SCHEDULED'}
+											class:IN_PROGRESS={b.status === 'IN_PROGRESS'}
+											class:COMPLETED={b.status === 'COMPLETED'}
+											class:CANCELLED={b.status === 'CANCELLED'}
+											class:compact
+											class:sel={selectedBooking?.id === b.id}
+											class:drag={draggingId === b.id}
 											style:top="{bookingTop(b)}px"
 											style:height="{bookingHeight(b)}px"
 											draggable={canDrag}
@@ -617,19 +657,36 @@
 												selectBooking(b);
 											}}
 										>
-											<span class="block font-medium">
+											<span class="accent"></span>
+											<span class="tm">
 												{formatLocalTime(b.startsAt, schedule.timezone)}–{formatLocalTime(
 													b.endsAt,
 													schedule.timezone
 												)}
 											</span>
-											<span class="block truncate text-muted-foreground">{b.opType}</span>
+											<span class="op">{b.opType}</span>
+											{#if !compact}
+												<span class="ft">
+													<span class="mav">{initialsOf(surgeonName(b.surgeonId))}</span>
+													<span class="who">{surgeonName(b.surgeonId)}</span>
+													<span class="stp">{statusLabel(b.status)}</span>
+												</span>
+											{/if}
 										</button>
 									{/each}
 								</div>
-							</div>
-						</article>
-					{/each}
+							{/each}
+
+							{#if showNow && date === today}
+								<div
+									class="now"
+									style:top="{HEADER_PX + (nowMin - startMin) * PIXELS_PER_MINUTE}px"
+								>
+									<span class="now-tag">{nowLabel}</span>
+								</div>
+							{/if}
+						</div>
+					</div>
 				</div>
 			</div>
 
@@ -639,67 +696,69 @@
 		{:else if view === 'week' && weekSchedule}
 			{@const ws = weekSchedule}
 			<!--
-				Week-view keeps the horizontal-scroll layout — 7 day columns
-				don't stack usefully on a phone. `snap-x snap-mandatory` on the
-				scroller + `snap-start` on each day column gives the scroll a
-				per-day snap so swiping feels deliberate instead of slippery.
+				Week-view: same board, 7 day-columns for the selected OR. The
+				"today" column is tinted and carries its own per-day now-line.
 			-->
-			<div class="snap-x snap-mandatory overflow-x-auto rounded-2xl border">
-				<div class="flex min-w-max">
-					<!-- Time gutter (same as day-view) -->
-					<div class="w-16 shrink-0 border-r bg-muted/40">
-						<div class="flex h-12 items-center justify-center border-b border-border text-xs">
-							{ws.operatingRoom.code}
+			<div class="board glass overflow-hidden rounded-2xl">
+				<div class="board-scroll">
+					<div
+						class="sched-grid week"
+						style="grid-template-columns: 56px repeat(7, minmax(150px, 1fr))"
+					>
+						<div class="axis-h">
+							<span class="t-mono text-[11px] text-muted-foreground">{ws.operatingRoom.code}</span>
 						</div>
-						<div class="relative" style:height="{totalPx}px">
-							{#each hourTicks as t (t.minute)}
-								<div
-									class="absolute -translate-y-1/2 px-2 text-right text-xs text-muted-foreground"
-									style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px"
-								>
-									{t.label}
-								</div>
-							{/each}
-						</div>
-					</div>
-
-					<!-- Per-day columns (always 7) -->
-					{#each ws.days as day (day.date)}
-						<div
-							class="w-44 shrink-0 snap-start border-r border-border last:border-r-0"
-							data-testid="week-col-{day.date}"
-						>
-							<div
-								class="flex h-12 flex-col items-center justify-center border-b border-border px-2"
-							>
-								<span class="text-xs text-muted-foreground">
+						{#each ws.days as day (day.date)}
+							<div class="col-h wk" class:today={day.date === today}>
+								<span class="c">
 									{new Date(`${day.date}T00:00:00Z`).toLocaleDateString(undefined, {
 										weekday: 'short',
 										timeZone: 'UTC'
 									})}
 								</span>
-								<span class="text-sm font-medium">{day.date.slice(5)}</span>
+								<span class="n">{day.date.slice(5)}</span>
 							</div>
+						{/each}
+
+						<div class="axis" style:height="{totalPx}px">
+							{#each hourTicks as t (t.minute)}
+								<span class="tk" style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px">
+									{t.label}
+								</span>
+							{/each}
+						</div>
+						{#each ws.days as day (day.date)}
+							{@const isToday = day.date === today}
 							<!-- svelte-ignore a11y_click_events_have_key_events -->
 							<!-- svelte-ignore a11y_no_static_element_interactions -->
 							<div
-								class="relative w-full cursor-cell hover:bg-muted/30"
+								class="slots"
+								class:today={isToday}
 								style:height="{totalPx}px"
+								data-testid="week-col-{day.date}"
 								onclick={(e) => openCreate(ws.operatingRoom.id, day.date, e)}
 								aria-label="Create booking on {day.date} in {ws.operatingRoom.code}"
 							>
 								{#each hourTicks as t (t.minute)}
-									<div
-										class="pointer-events-none absolute right-0 left-0 border-t border-border/50"
-										style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px"
-									></div>
+									<div class="line" style:top="{(t.minute - startMin) * PIXELS_PER_MINUTE}px"></div>
 								{/each}
+								{#if isToday && showNow}
+									<div
+										class="now-local"
+										style:top="{(nowMin - startMin) * PIXELS_PER_MINUTE}px"
+									></div>
+								{/if}
 								{#each day.bookings as b (b.id)}
+									{@const compact = bookingHeight(b) < COMPACT_PX}
 									<button
 										type="button"
-										class="absolute right-1 left-1 cursor-pointer rounded border px-2 py-1 text-left text-xs shadow-sm {statusColor(
-											b.status
-										)} {selectedBooking?.id === b.id ? 'ring-2 ring-primary' : ''}"
+										class="bk"
+										class:SCHEDULED={b.status === 'SCHEDULED'}
+										class:IN_PROGRESS={b.status === 'IN_PROGRESS'}
+										class:COMPLETED={b.status === 'COMPLETED'}
+										class:CANCELLED={b.status === 'CANCELLED'}
+										class:compact
+										class:sel={selectedBooking?.id === b.id}
 										style:top="{bookingTop(b)}px"
 										style:height="{bookingHeight(b)}px"
 										onclick={(e) => {
@@ -707,18 +766,19 @@
 											selectBooking(b);
 										}}
 									>
-										<span class="block font-medium">
+										<span class="accent"></span>
+										<span class="tm">
 											{formatLocalTime(b.startsAt, ws.timezone)}–{formatLocalTime(
 												b.endsAt,
 												ws.timezone
 											)}
 										</span>
-										<span class="block truncate text-muted-foreground">{b.opType}</span>
+										<span class="op">{b.opType}</span>
 									</button>
 								{/each}
 							</div>
-						</div>
-					{/each}
+						{/each}
+					</div>
 				</div>
 			</div>
 
@@ -727,7 +787,7 @@
 			{/if}
 		{/if}
 	</div>
-</main>
+</div>
 
 {#if clinic}
 	<BookingFormDialog
@@ -754,3 +814,387 @@
 		/>
 	{/if}
 {/if}
+
+<style>
+	/* ===========================================================================
+	 * Schedule board — single sticky grid: [time-gutter | OR columns].
+	 * Faithful port of the redesign's Luminous/Midnight board, expressed against
+	 * the app's own semantic tokens so light/dark flip automatically.
+	 * ======================================================================== */
+	.board {
+		box-shadow: var(--shadow-lg);
+	}
+	.board-scroll {
+		max-height: min(560px, calc(100vh - 290px));
+		overflow: auto;
+		overscroll-behavior: contain;
+	}
+	.board-scroll::-webkit-scrollbar {
+		width: 9px;
+		height: 9px;
+	}
+	.board-scroll::-webkit-scrollbar-thumb {
+		background: color-mix(in oklch, var(--foreground) 16%, transparent);
+		border-radius: 99px;
+		border: 3px solid transparent;
+		background-clip: padding-box;
+	}
+
+	.sched-grid {
+		display: grid;
+		position: relative;
+	}
+
+	/* ---- sticky headers / gutter ---- */
+	.axis-h,
+	.col-h {
+		height: 56px;
+		position: sticky;
+		top: 0;
+		z-index: 4;
+		display: flex;
+		align-items: center;
+		background: color-mix(in oklch, var(--background) 90%, transparent);
+		backdrop-filter: blur(8px);
+		border-bottom: 1px solid var(--border);
+	}
+	.axis-h {
+		left: 0;
+		z-index: 5;
+		padding-left: 8px;
+	}
+	.col-h {
+		flex-direction: column;
+		justify-content: center;
+		gap: 1px;
+		padding: 0 12px;
+		border-left: 1px solid color-mix(in oklch, var(--border) 55%, transparent);
+	}
+	.col-h.wk {
+		align-items: center;
+		gap: 2px;
+	}
+	.col-h.wk .c {
+		font-size: 10.5px;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--muted-foreground);
+	}
+	.col-h.wk .n {
+		font-size: 15px;
+		font-weight: 700;
+	}
+	.col-h.today {
+		background: color-mix(in oklch, var(--primary) 9%, var(--background));
+	}
+	.col-h.today .n {
+		color: var(--primary);
+	}
+	.or-pill {
+		margin-top: 2px;
+		padding: 1px 6px;
+		border-radius: 999px;
+		font-size: 9px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--muted-foreground);
+		background: var(--muted);
+	}
+
+	.axis {
+		position: sticky;
+		left: 0;
+		z-index: 3;
+		background: color-mix(in oklch, var(--background) 90%, transparent);
+		backdrop-filter: blur(8px);
+	}
+	.axis .tk {
+		position: absolute;
+		right: 8px;
+		transform: translateY(-50%);
+		font-family: var(--font-mono);
+		font-size: 10.5px;
+		color: var(--muted-foreground);
+	}
+
+	/* ---- slot columns ---- */
+	.slots {
+		position: relative;
+		cursor: cell;
+		border-left: 1px solid color-mix(in oklch, var(--border) 55%, transparent);
+	}
+	.slots:hover {
+		background: color-mix(in oklch, var(--foreground) 2%, transparent);
+	}
+	.slots.today {
+		background: color-mix(in oklch, var(--primary) 5%, transparent);
+	}
+	.slots.dragover {
+		box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--primary) 45%, transparent);
+	}
+	.line {
+		position: absolute;
+		left: 0;
+		right: 0;
+		pointer-events: none;
+		border-top: 1px solid color-mix(in oklch, var(--border) 50%, transparent);
+	}
+
+	/* ---- now indicator ---- */
+	.now {
+		position: absolute;
+		left: 56px;
+		right: 0;
+		height: 0;
+		z-index: 2;
+		pointer-events: none;
+		border-top: 2px dashed var(--primary);
+	}
+	.now::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		top: -4px;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--primary);
+		box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 22%, transparent);
+	}
+	.now-tag {
+		position: absolute;
+		left: 8px;
+		top: 50%;
+		transform: translateY(-50%);
+		padding: 2px 6px;
+		border-radius: 6px;
+		font-family: var(--font-mono);
+		font-size: 10px;
+		font-weight: 600;
+		line-height: 1.3;
+		color: var(--primary-foreground);
+		background: var(--primary);
+	}
+	.now-local {
+		position: absolute;
+		left: 0;
+		right: 0;
+		height: 0;
+		z-index: 2;
+		pointer-events: none;
+		border-top: 2px dashed var(--primary);
+	}
+	.now-local::before {
+		content: '';
+		position: absolute;
+		left: -3px;
+		top: -4px;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--primary);
+		box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 22%, transparent);
+	}
+	:global(.dark) .now,
+	:global(.dark) .now-local {
+		filter: drop-shadow(0 0 6px color-mix(in oklch, var(--primary) 70%, transparent));
+	}
+
+	/* ---- booking blocks (Luminous) ---- */
+	.bk {
+		position: absolute;
+		left: 7px;
+		right: 7px;
+		z-index: 1;
+		padding: 8px 11px;
+		border-radius: 12px;
+		overflow: hidden;
+		text-align: left;
+		cursor: pointer;
+		border: 1px solid color-mix(in oklch, var(--foreground) 5%, transparent);
+		transition:
+			transform 0.14s var(--ease),
+			box-shadow 0.14s var(--ease);
+	}
+	.bk:hover {
+		transform: translateY(-1px);
+	}
+	.bk.compact {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		padding: 5px 10px;
+	}
+	.bk .accent {
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		width: 4px;
+	}
+	.bk .tm {
+		display: block;
+		font-family: var(--font-mono);
+		font-size: 10.5px;
+		font-weight: 500;
+		color: var(--muted-foreground);
+	}
+	.bk .op {
+		display: block;
+		margin-top: 1px;
+		font-size: 13px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		color: var(--foreground);
+	}
+	.bk.compact .op {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.bk .ft {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-top: 7px;
+	}
+	.bk .mav {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		width: 19px;
+		height: 19px;
+		border-radius: 50%;
+		font-size: 9px;
+		font-weight: 600;
+		color: var(--muted-foreground);
+		background: color-mix(in oklch, var(--foreground) 12%, transparent);
+	}
+	.bk .who {
+		font-size: 11px;
+		color: var(--muted-foreground);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.bk .stp {
+		margin-left: auto;
+		flex-shrink: 0;
+		padding: 2px 7px;
+		border-radius: 999px;
+		font-size: 9.5px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+	.bk.sel {
+		box-shadow: 0 0 0 2px var(--primary);
+	}
+	.bk.drag {
+		opacity: 0.5;
+	}
+
+	.bk.SCHEDULED {
+		background: linear-gradient(
+			135deg,
+			color-mix(in oklch, var(--primary) 14%, var(--card)),
+			var(--card)
+		);
+		box-shadow: 0 6px 16px -10px color-mix(in oklch, var(--foreground) 40%, transparent);
+	}
+	.bk.SCHEDULED .accent {
+		background: var(--primary);
+	}
+	.bk.SCHEDULED .stp {
+		background: color-mix(in oklch, var(--primary) 18%, transparent);
+		color: color-mix(in oklch, var(--primary) 80%, black);
+	}
+	.bk.IN_PROGRESS {
+		background: linear-gradient(
+			135deg,
+			color-mix(in oklch, var(--status-progress) 16%, var(--card)),
+			var(--card)
+		);
+		box-shadow: 0 6px 16px -10px color-mix(in oklch, var(--status-progress) 40%, transparent);
+	}
+	.bk.IN_PROGRESS .accent {
+		background: var(--status-progress);
+	}
+	.bk.IN_PROGRESS .stp {
+		background: color-mix(in oklch, var(--status-progress) 22%, transparent);
+		color: color-mix(in oklch, var(--status-progress) 70%, black);
+	}
+	.bk.COMPLETED {
+		background: linear-gradient(135deg, var(--muted), var(--card));
+	}
+	.bk.COMPLETED .accent {
+		background: var(--muted-foreground);
+	}
+	.bk.COMPLETED .op {
+		color: var(--muted-foreground);
+	}
+	.bk.COMPLETED .stp {
+		background: var(--muted);
+		color: var(--muted-foreground);
+	}
+	.bk.CANCELLED {
+		background: var(--muted);
+	}
+	.bk.CANCELLED .accent {
+		background: color-mix(in oklch, var(--muted-foreground) 55%, transparent);
+	}
+	.bk.CANCELLED .op {
+		color: var(--muted-foreground);
+		text-decoration: line-through;
+	}
+	.bk.CANCELLED .stp {
+		background: var(--muted);
+		color: var(--muted-foreground);
+	}
+
+	/* ---- booking blocks (Midnight override) ---- */
+	:global(.dark) .bk {
+		border-color: transparent;
+		backdrop-filter: blur(4px);
+	}
+	:global(.dark) .bk .accent {
+		display: none;
+	}
+	:global(.dark) .bk .mav {
+		background: rgba(255, 255, 255, 0.12);
+		color: var(--foreground);
+	}
+	:global(.dark) .bk.SCHEDULED {
+		background: color-mix(in oklch, var(--primary) 14%, transparent);
+		border-color: color-mix(in oklch, var(--primary) 50%, transparent);
+		box-shadow: 0 0 24px -6px color-mix(in oklch, var(--primary) 55%, transparent);
+	}
+	:global(.dark) .bk.SCHEDULED .stp {
+		background: color-mix(in oklch, var(--primary) 22%, transparent);
+		color: color-mix(in oklch, var(--primary) 70%, white);
+	}
+	:global(.dark) .bk.IN_PROGRESS {
+		background: color-mix(in oklch, var(--status-progress) 16%, transparent);
+		border-color: color-mix(in oklch, var(--status-progress) 55%, transparent);
+		box-shadow: 0 0 26px -6px color-mix(in oklch, var(--status-progress) 55%, transparent);
+	}
+	:global(.dark) .bk.IN_PROGRESS .stp {
+		background: color-mix(in oklch, var(--status-progress) 22%, transparent);
+		color: color-mix(in oklch, var(--status-progress) 75%, white);
+	}
+	:global(.dark) .bk.COMPLETED {
+		background: rgba(148, 163, 184, 0.12);
+		border-color: rgba(148, 163, 184, 0.32);
+	}
+	:global(.dark) .bk.CANCELLED {
+		background: rgba(148, 163, 184, 0.1);
+		border-color: rgba(148, 163, 184, 0.26);
+	}
+	:global(.dark) .bk.sel {
+		box-shadow:
+			0 0 0 2px var(--primary),
+			0 0 24px -4px color-mix(in oklch, var(--primary) 70%, transparent);
+	}
+</style>

@@ -86,7 +86,7 @@
 	<title>Reset password · Kliniq</title>
 </svelte:head>
 
-<Card.Root class="rounded-2xl border-border/40 p-2 shadow-2xl">
+<Card.Root class="rounded-[24px] border-border/40 p-2 shadow-2xl">
 	{#if token}
 		<!-- COMPLETE-RESET MODE: email link delivered the user here. -->
 		{#if resetSuccess}
@@ -149,7 +149,7 @@
 						</p>
 					{/if}
 
-					<Button type="submit" class="w-full" disabled={resetSubmitting}>
+					<Button type="submit" class="cta-gradient w-full" disabled={resetSubmitting}>
 						{resetSubmitting ? 'Updating…' : 'Update password'}
 					</Button>
 
@@ -218,7 +218,7 @@
 						</p>
 					{/if}
 
-					<Button type="submit" class="w-full" disabled={requestSubmitting}>
+					<Button type="submit" class="cta-gradient w-full" disabled={requestSubmitting}>
 						{requestSubmitting ? 'Sending…' : 'Send reset link'}
 					</Button>
 

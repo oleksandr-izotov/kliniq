@@ -86,13 +86,11 @@
 	}
 </script>
 
-<aside
-	class="fixed inset-y-0 right-0 z-30 w-full max-w-sm overflow-y-auto border-l bg-background p-6 shadow-2xl"
-	aria-label="Booking details"
->
-	<header class="mb-4 flex items-start justify-between gap-3">
-		<div class="space-y-1">
-			<h2 class="text-lg font-semibold">Booking</h2>
+<div class="scrim" onclick={onClose} aria-hidden="true"></div>
+<aside class="panel" aria-label="Booking details">
+	<header class="mb-5 flex items-start justify-between gap-3">
+		<div class="space-y-1.5">
+			<h2 class="text-[17px] font-semibold">Booking</h2>
 			<span
 				class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs tracking-wide uppercase {statusBadgeClass(
 					booking.status
@@ -104,21 +102,37 @@
 		<Button variant="outline" size="sm" onclick={onClose} aria-label="Close panel">Close</Button>
 	</header>
 
-	<dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-2 text-sm">
+	<!-- Surgeon hero -->
+	<div
+		class="mb-5 flex items-center gap-3 rounded-2xl border border-border bg-foreground/[0.03] p-3"
+	>
+		<div
+			class="grid size-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/70 to-primary text-sm font-bold text-primary-foreground"
+		>
+			{#if surgeon}{surgeon.displayName
+					.split(/\s+/)
+					.filter(Boolean)
+					.slice(0, 2)
+					.map((p) => p[0]?.toUpperCase() ?? '')
+					.join('')}{:else}?{/if}
+		</div>
+		<div class="min-w-0">
+			<div class="truncate text-sm font-semibold">
+				{surgeon ? surgeon.displayName : 'Unknown surgeon'}
+			</div>
+			{#if surgeon}
+				<div class="text-xs text-muted-foreground capitalize">
+					{surgeon.specialty.toLowerCase()}
+				</div>
+			{/if}
+		</div>
+	</div>
+
+	<dl class="grid grid-cols-[max-content_1fr] gap-x-3.5 gap-y-2.5 text-sm">
 		<dt class="text-muted-foreground">Operating room</dt>
 		<dd class="font-medium">
 			{#if room}
-				<span class="font-mono text-xs text-muted-foreground">{room.code}</span> · {room.name}
-			{:else}
-				<span class="text-muted-foreground">unknown</span>
-			{/if}
-		</dd>
-
-		<dt class="text-muted-foreground">Surgeon</dt>
-		<dd class="font-medium">
-			{#if surgeon}
-				{surgeon.displayName}
-				<span class="text-xs text-muted-foreground">· {surgeon.specialty}</span>
+				<span class="t-mono text-xs text-muted-foreground">{room.code}</span> · {room.name}
 			{:else}
 				<span class="text-muted-foreground">unknown</span>
 			{/if}
@@ -126,17 +140,20 @@
 
 		<dt class="text-muted-foreground">When</dt>
 		<dd class="font-medium">
-			{day} · {formatLocalTime(booking.startsAt, timezone)}–{formatLocalTime(
-				booking.endsAt,
-				timezone
-			)}
+			{day} ·
+			<span class="t-mono"
+				>{formatLocalTime(booking.startsAt, timezone)}–{formatLocalTime(
+					booking.endsAt,
+					timezone
+				)}</span
+			>
 		</dd>
 
 		<dt class="text-muted-foreground">Operation</dt>
 		<dd class="font-medium">{booking.opType}</dd>
 
 		<dt class="text-muted-foreground">Patient ref</dt>
-		<dd class="font-mono text-xs">{booking.patientRef}</dd>
+		<dd class="t-mono text-xs">{booking.patientRef}</dd>
 
 		{#if booking.notes}
 			<dt class="text-muted-foreground">Notes</dt>
@@ -179,3 +196,44 @@
 		{/if}
 	</div>
 </aside>
+
+<style>
+	.scrim {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		background: rgba(0, 0, 0, 0.34);
+		animation: scrim-fade 0.2s ease;
+	}
+	.panel {
+		position: fixed;
+		inset-block: 0;
+		right: 0;
+		z-index: 50;
+		width: 100%;
+		max-width: 392px;
+		padding: 24px;
+		overflow-y: auto;
+		background: var(--background);
+		border-left: 1px solid var(--border);
+		box-shadow: var(--shadow-2xl);
+		animation: panel-in 0.22s cubic-bezier(0.2, 0.7, 0.3, 1);
+	}
+	@keyframes scrim-fade {
+		from {
+			opacity: 0;
+		}
+	}
+	@keyframes panel-in {
+		from {
+			transform: translateX(20px);
+			opacity: 0.4;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.scrim,
+		.panel {
+			animation: none;
+		}
+	}
+</style>

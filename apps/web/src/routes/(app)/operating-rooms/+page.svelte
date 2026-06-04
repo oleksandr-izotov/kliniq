@@ -165,11 +165,10 @@
 	<title>Operating rooms · Kliniq</title>
 </svelte:head>
 
-<main class="min-h-screen bg-background p-4 sm:p-6">
+<div class="contents">
 	<div class="mx-auto w-full max-w-3xl space-y-6">
 		<header class="space-y-1">
-			<a href="/" class="text-sm text-muted-foreground hover:text-foreground">← Back to home</a>
-			<h1 class="text-3xl font-bold tracking-tight">Operating rooms</h1>
+			<h1 class="t-h1">Operating rooms</h1>
 			<p class="text-sm text-muted-foreground">
 				{#if isManager}
 					Add, rename, mark for maintenance, or archive operating rooms. Archived rooms are hidden
@@ -369,4 +368,4 @@
 			{/if}
 		</section>
 	</div>
-</main>
+</div>

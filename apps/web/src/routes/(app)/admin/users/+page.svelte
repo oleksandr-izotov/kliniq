@@ -174,7 +174,7 @@
 
 <div class="space-y-4">
 	<header class="space-y-1">
-		<h1 class="text-3xl font-bold tracking-tight">Users</h1>
+		<h1 class="t-h1">Users</h1>
 		<p class="text-sm text-muted-foreground">
 			Change roles, flag surgeons, disable accounts. Disabling logs the user out everywhere. You
 			can't demote or disable yourself — ask another admin.

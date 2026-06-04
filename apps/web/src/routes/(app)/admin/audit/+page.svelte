@@ -83,7 +83,7 @@
 
 <div class="space-y-4">
 	<header class="space-y-1">
-		<h1 class="text-3xl font-bold tracking-tight">Audit log</h1>
+		<h1 class="t-h1">Audit log</h1>
 		<p class="text-sm text-muted-foreground">
 			Append-only history of every state change. Click a row to see the before/after JSON.
 		</p>
@@ -274,8 +274,13 @@
 </div>
 
 {#if selected}
+	<div
+		class="fixed inset-0 z-20 animate-in bg-black/35 duration-200 fade-in"
+		onclick={() => (selected = null)}
+		aria-hidden="true"
+	></div>
 	<aside
-		class="fixed inset-y-0 right-0 z-30 w-full max-w-xl overflow-y-auto border-l bg-background p-6 shadow-2xl"
+		class="fixed inset-y-0 right-0 z-30 w-full max-w-xl animate-in overflow-y-auto border-l bg-background p-6 shadow-2xl duration-200 slide-in-from-right-4"
 		aria-label="Audit event details"
 	>
 		<header class="mb-4 flex items-start justify-between gap-3">
