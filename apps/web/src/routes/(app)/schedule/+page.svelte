@@ -24,7 +24,6 @@
 	} from '$lib/util/eventSource';
 	import BookingFormDialog from '$lib/components/bookings/BookingFormDialog.svelte';
 	import BookingSidePanel from '$lib/components/bookings/BookingSidePanel.svelte';
-	import EmptyState from '$lib/components/EmptyState.svelte';
 	import ModeToggle from '$lib/components/ModeToggle.svelte';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
@@ -178,7 +177,7 @@
 
 	// Total bookings across all rooms for the visible day. Drives the empty-state
 	// overlay: when zero, the grid still renders (slots stay clickable / drop
-	// targets) but a branded illustration floats over it as a "what next" hint.
+	// targets) but a small text hint floats over it.
 	const dayBookingCount = $derived(
 		schedule ? schedule.operatingRooms.reduce((n, or) => n + or.bookings.length, 0) : 0
 	);
@@ -583,13 +582,12 @@
 				{#if dayBookingCount === 0}
 					<!-- Grid still renders (slots stay clickable / drop targets); this
 						floats over it as a hint and is click-through. -->
-					<div class="pointer-events-none absolute inset-x-0 top-20 z-20 flex justify-center">
-						<div class="glass rounded-3xl px-4 py-2">
-							<EmptyState
-								image="/illustrations/empty-bookings.webp"
-								title="No bookings on {date}"
-								description="Click an empty slot to book a procedure."
-							/>
+					<div class="pointer-events-none absolute inset-x-0 top-24 z-20 flex justify-center">
+						<div class="glass rounded-2xl px-6 py-4 text-center">
+							<h3 class="text-sm font-semibold">No bookings on {date}</h3>
+							<p class="mt-1 text-xs text-muted-foreground">
+								Click an empty slot to book a procedure.
+							</p>
 						</div>
 					</div>
 				{/if}
