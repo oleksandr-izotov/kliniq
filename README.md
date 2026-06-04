@@ -36,6 +36,18 @@ The schedule is pre-seeded with 3 operating rooms and ~10 bookings spread across
 
 ---
 
+## Screenshots
+
+| Marketing landing — Luminous | Dashboard — Luminous |
+| :---: | :---: |
+| [![Marketing landing](docs/screenshots/landing.webp)](docs/screenshots/landing.webp) | [![Dashboard](docs/screenshots/dashboard.webp)](docs/screenshots/dashboard.webp) |
+| **Schedule day board — Midnight** | **Sign in — Midnight** |
+| [![Schedule day board](docs/screenshots/schedule.webp)](docs/screenshots/schedule.webp) | [![Sign in](docs/screenshots/login.webp)](docs/screenshots/login.webp) |
+
+> One theme switch, two skins — **Luminous** (warm near-white, soft depth) and **Midnight** (deep slate, glassmorphism, emerald glow). Self-hosted Inter + JetBrains Mono; a single emerald accent throughout. The German marketing landing lives at [`/welcome`](apps/web/src/routes/welcome/+page.svelte).
+
+---
+
 ## Architecture (prod)
 
 ```mermaid
