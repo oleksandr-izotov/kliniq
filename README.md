@@ -209,14 +209,15 @@ See [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for the full deploy and operations proc
 
 Read in this order to onboard:
 
-1. [`docs/ROADMAP.md`](docs/ROADMAP.md) — V1 / V2 / V3 scope and acceptance criteria
-2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system diagram, layers, tech rationale
-3. [`docs/DOMAIN.md`](docs/DOMAIN.md) — entities, ER model, business rules
-4. [`docs/REPO_STRUCTURE.md`](docs/REPO_STRUCTURE.md) — directory layout
-5. [`docs/DECISIONS.md`](docs/DECISIONS.md) — architecture decision records
-6. [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — prod operations
-7. [`docs/STYLE.md`](docs/STYLE.md) — Kliniq Emerald design system
-8. [`docs/VISUALS.md`](docs/VISUALS.md) — visual style + AI prompts used to generate brand assets
+1. [`docs/PLAN_NEXT.md`](docs/PLAN_NEXT.md) — the concrete plan for the next stretch: foundation, then recurring series, audit log UI and utilisation reports
+2. [`docs/ROADMAP.md`](docs/ROADMAP.md) — V1 / V2 / V3 scope and acceptance criteria
+3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system diagram, layers, tech rationale
+4. [`docs/DOMAIN.md`](docs/DOMAIN.md) — entities, ER model, business rules
+5. [`docs/REPO_STRUCTURE.md`](docs/REPO_STRUCTURE.md) — directory layout
+6. [`docs/DECISIONS.md`](docs/DECISIONS.md) — architecture decision records
+7. [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — prod operations
+8. [`docs/STYLE.md`](docs/STYLE.md) — Kliniq Emerald design system
+9. [`docs/VISUALS.md`](docs/VISUALS.md) — visual style + AI prompts used to generate brand assets
 
 Executable sprint plans:
 
@@ -244,4 +245,4 @@ The docs in `docs/` plus the README are designed to be self-contained. To resume
 2. The current sprint file (`docs/sprints/SPRINT_*.md`)
 3. The relevant ADRs (`docs/DECISIONS.md`)
 4. The latest commits on `main` so it sees what's actually built vs planned
-5. [`docs/RUNBOOK.md`](docs/RUNBOOK.md) when anything touches prod
+10. [`docs/RUNBOOK.md`](docs/RUNBOOK.md) when anything touches prod

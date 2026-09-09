@@ -6,7 +6,7 @@ Reykjavík behind nginx. The demo is live again; see the deploy section below an
 [RUNBOOK.md](./RUNBOOK.md) for the current procedure.
 **Reason:** No time to invest right now; project isn't generating value yet. Parking it cleanly so it can be picked back up without re-learning the context.
 
-This file is the single entry point for "I'm back, what now?". Read it first, then [ROADMAP.md](./ROADMAP.md) and the open sprint file [sprints/SPRINT_6.md](./sprints/SPRINT_6.md).
+This file is the single entry point for "I'm back, what now?". Read it first, then [PLAN_NEXT.md](./PLAN_NEXT.md) — the concrete plan for the next stretch, written 2026-09-09 — and, for the wider picture, [ROADMAP.md](./ROADMAP.md) and the open sprint file [sprints/SPRINT_6.md](./sprints/SPRINT_6.md).
 
 ---
 
