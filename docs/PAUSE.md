@@ -1,6 +1,9 @@
 # Pause & resume notes
 
 **Paused:** 2026-05-23, after Sprint 6 Day 65.
+**Redeployed:** 2026-09-09 — moved off Hetzner/Coolify onto a self-managed VPS in
+Reykjavík behind nginx. The demo is live again; see the deploy section below and
+[RUNBOOK.md](./RUNBOOK.md) for the current procedure.
 **Reason:** No time to invest right now; project isn't generating value yet. Parking it cleanly so it can be picked back up without re-learning the context.
 
 This file is the single entry point for "I'm back, what now?". Read it first, then [ROADMAP.md](./ROADMAP.md) and the open sprint file [sprints/SPRINT_6.md](./sprints/SPRINT_6.md).
@@ -22,7 +25,7 @@ This file is the single entry point for "I'm back, what now?". Read it first, th
 | 65 | Branded empty-state illustrations (5 screens) | ✅ done, deployed |
 | **66** | **Feedback round** — email demo link to 2–3 humans, capture quotes in `docs/FEEDBACK_V1_1.md` | ⬜ **needs the user** (real reviewers) |
 | **67** | Apply top-3 feedback fixes | ⬜ depends on 66 |
-| **68** | Web image → built in GHA & pushed to GHCR (stop building web on the Coolify host); move `SENTRY_AUTH_TOKEN` from Coolify env to a GHA secret | ⬜ tech debt, code-only |
+| **68** | Web image → built in GHA & pushed to GHCR (stop building it on the deploy host); move `SENTRY_AUTH_TOKEN` into a GHA secret | ⬜ tech debt, code-only |
 | **69** | Branch coverage push: `com.kliniq.usecase.**` ≥ 75 %, `BookingStatus.canTransitionTo` 100 % (currently ~60.4 % overall) | ⬜ code-only |
 | **70** | V1.2 retro + tag `v1.2.0` + GitHub Release | ⬜ closes sprint |
 
@@ -34,11 +37,20 @@ This file is the single entry point for "I'm back, what now?". Read it first, th
 
 **Run locally** — see [README.md](../README.md) Quick start and [RUNBOOK.md](./RUNBOOK.md). In short: `docker compose up` (postgres + redis + mailpit), then `./gradlew :apps:api:bootRun` and `pnpm --filter ./apps/web dev`. HTTPS dev cert on `:8443`.
 
-**Deploy** — push to `main`, then in Coolify UI (SSH tunnel `ssh -L 8000:localhost:8000 root@$KLINIQ_OLD_HOST`, open http://localhost:8000) → Projects → Kliniq → production → kliniq → **Deploy**. web builds on-host; api pulls `:latest` from GHCR (run `docker pull …kliniq-api:latest` on the box first if api changed). Full infra map lives in the maintainer's notes / RUNBOOK.
+**Deploy** — there is no Coolify any more. The stack runs from
+`/srv/kliniq/compose.izotov.yaml` on `$KLINIQ_HOST`, with the host's nginx as
+ingress. Web builds on the host (`docker compose -f compose.izotov.yaml up -d
+--build web`); the api image is built on a machine with a JDK — jOOQ needs a live
+database at compile time — and loaded over ssh. Full commands in
+[RUNBOOK.md](./RUNBOOK.md) under "Current deployment".
 
 **Gate before any commit** — `./gradlew check` (api) and `pnpm --filter ./apps/web check && pnpm --filter ./apps/web lint` (web). lefthook runs gitleaks + lint + commitlint on commit, svelte-check on push. Commits are conventional-commit format; **no Claude co-author** (portfolio = sole-author).
 
-**Cost while paused** — Hetzner CPX22 ~€10.10/mo keeps the demo live. If you want to cut it to zero, snapshot the box and destroy it; the repo + this doc + RUNBOOK are enough to redeploy from scratch. UptimeRobot will email if the box dies — pause that monitor if you tear down, or you'll get alert noise.
+**Cost while paused** — none of its own: the demo shares a VPS already paid for
+by other projects. Postgres is dumped nightly at 03:00 UTC by
+`scripts/backup-pg.sh` with 14-day retention, and the restore path was verified
+on 2026-09-09 by loading the latest dump into a scratch database and comparing
+row counts.
 
 ---
 
@@ -57,7 +69,10 @@ V2 is customer portal + multi-tenancy. **First task is an ADR**: per-tenant depl
 - **Architecture.** Proper layered/DDD separation, not a controller-soup. Domain logic (booking FSM, overlap rules) sits in `domain/`, isolated from web and persistence. This is above typical solo-project quality.
 - **Backend test discipline.** 6.4k test LOC against 9.6k main — a ~0.67 ratio with 24 test files including Testcontainers integration. Rare for a solo project.
 - **Auth, done the hard (right) way.** Self-hosted Argon2id + WebAuthn passkeys + Redis-backed sessions + CSRF + per-IP rate limiting. You built what most people outsource to Auth0, and it works in prod.
-- **Real operations.** Deployed on Hetzner via Coolify with Caddy ingress, Sentry (both sides), UptimeRobot liveness, daily pg_dump, fail2ban, SSH hardened (no password auth). This is a running product, not a localhost demo.
+- **Real operations.** Deployed and running, with nightly verified pg_dump,
+  fail2ban and hardened SSH. This is a running product, not a localhost demo.
+  *(2026-09-09: after the move, Sentry has no DSN configured and there is no
+  uptime monitor — both were tied to the old host and need re-wiring.)*
 - **CI + hygiene.** ktlint, detekt, JaCoCo, gitleaks, commitlint, eslint, prettier, svelte-check, vitest — all wired. Conventional commits, lefthook hooks, ADRs in `DECISIONS.md`, scoped roadmap.
 
 ### Real gaps

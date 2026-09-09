@@ -17,7 +17,7 @@
 
 ## Live demo
 
-**→ <https://kliniq.izotov.dev>** — V1.1, [tagged `v1.0.0`](https://github.com/oleksandr-izotov/kliniq/releases/tag/v1.0.0) and shipped 2026-05-09 to a Hetzner CPX22 + Coolify + Caddy stack.
+**→ <https://kliniq.izotov.dev>** — V1.1, [tagged `v1.0.0`](https://github.com/oleksandr-izotov/kliniq/releases/tag/v1.0.0), first shipped 2026-05-09. Now runs on a self-managed VPS in Reykjavík behind nginx and Cloudflare; see [Architecture](#architecture-prod).
 
 Sign in with any of the demo surgeon accounts:
 
@@ -53,37 +53,55 @@ The schedule is pre-seeded with 3 operating rooms and ~10 bookings spread across
 ```mermaid
 flowchart LR
     Browser([Browser])
-    subgraph Hetzner["Hetzner CPX22 · Coolify"]
-        Caddy["Caddy 2<br/>edge TLS · headers · gzip"]
+    CF["Cloudflare<br/>proxy · edge TLS"]
+    subgraph VPS["VPS · Reykjavík (2 vCPU, 3.8 GB)"]
+        Nginx["nginx<br/>origin TLS · headers · rate limit"]
         Web["SvelteKit web<br/>node 22 · adapter-node"]
         API["Spring Boot api<br/>JDK 21"]
         Postgres[("Postgres 16<br/>EXCLUDE gist<br/>+ Flyway")]
         Redis[("Redis 7.4<br/>sessions + pub-sub")]
         Mailpit["Mailpit<br/>SMTP health fallback"]
     end
-    Resend["Resend HTTPS API<br/>transactional email"]
     Sentry["Sentry SaaS<br/>api + web errors"]
-    UptimeRobot["UptimeRobot<br/>5-min liveness probe"]
-    GHA["GitHub Actions"]
-    GHCR["GHCR<br/>kliniq-api:latest"]
 
-    Browser -->|HTTPS · LE cert| Caddy
-    Caddy -->|"/api · /actuator · /v3/api-docs · /swagger-ui"| API
-    Caddy -->|else| Web
+    Browser -->|HTTPS| CF
+    CF -->|"origin cert *.izotov.dev"| Nginx
+    Nginx -->|"/api · /actuator · /v3/api-docs · /swagger-ui"| API
+    Nginx -->|else| Web
     Web -->|SSR /me probe| API
     API --> Postgres
     API --> Redis
-    API -->|HTTPS POST| Resend
+    API --> Mailpit
     API -->|errors via logback| Sentry
     Web -->|errors via @sentry/sveltekit| Sentry
-    UptimeRobot -.->|"/actuator/health/liveness"| Caddy
-    GHA -->|push :latest on main| GHCR
-    GHCR -.->|docker pull on deploy| API
 ```
 
-The api image is built by GitHub Actions (it needs a live Postgres at compile time for jOOQ codegen — that's the `api-image` job's service container). The web image is built on the Hetzner host during a Coolify deploy because adapter-node's output is small enough that build-once-on-the-edge is fine and avoids a second CI artifact pipeline.
+The api image is built from source and loaded onto the host: jOOQ generates its
+code from a live database at compile time, and the deploy box has no JDK to run
+that. CI still builds and pushes the same image to GHCR on merge to main. The web
+image is built on the host — adapter-node's output is small enough that it costs
+less than a second CI artifact pipeline.
 
-Caddy is the single ingress and handles auto-TLS via Let's Encrypt TLS-ALPN-01. The four non-CSP security headers (`X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security`) live in the Caddyfile inside [`compose.prod.yaml`](compose.prod.yaml); CSP itself is emitted per page by SvelteKit ([`apps/web/svelte.config.js`](apps/web/svelte.config.js) `kit.csp`) because the framework needs to hash its own inline hydration scripts. The full [`docs/RUNBOOK.md`](docs/RUNBOOK.md) covers SSH access, backups, incident triage, and the env-var inventory.
+**Ingress.** nginx is the single entry point and terminates TLS with a Cloudflare
+Origin certificate covering `*.izotov.dev` — valid for 15 years, nothing to renew,
+and useless to anyone but Cloudflare. The firewall opens 80/443 only to
+Cloudflare's published ranges, so the origin cannot be reached directly, and
+`set_real_ip_from` restores the visitor's address from `CF-Connecting-IP` before
+rate limiting sees it.
+
+Security headers live in a snippet included by every location block, because
+nginx drops inherited `add_header` directives in any block that adds one of its
+own. CSP is deliberately absent there: SvelteKit computes per-page hashes for its
+inline hydration scripts and emits its own policy
+([`apps/web/svelte.config.js`](apps/web/svelte.config.js) `kit.csp`) — a second
+policy at the proxy would intersect with it and block hydration.
+
+The realtime endpoint needs `proxy_buffering off`; with buffering on, nginx holds
+server-sent events until its buffer fills, which for a quiet stream can be
+minutes.
+
+The full [`docs/RUNBOOK.md`](docs/RUNBOOK.md) covers SSH access, backups,
+incident triage, and the env-var inventory.
 
 ## Engineering deep dive
 
@@ -93,9 +111,9 @@ Things in this codebase worth reading if you're looking at it as a hiring sample
 - **Booking lifecycle is a real FSM, not a free-form status field.** [`Booking.kt:80`](apps/api/src/main/kotlin/com/kliniq/domain/booking/Booking.kt) defines the `SCHEDULED → IN_PROGRESS → COMPLETED` plus `→ CANCELLED` transitions and [`JooqBookingRepository.transitionStatus`](apps/api/src/main/kotlin/com/kliniq/persistence/booking/JooqBookingRepository.kt) does a compare-and-set against the expected current status so concurrent transitions can't both win.
 - **Realtime updates fire only after the booking commits.** [`BookingPublishAfterCommitTest.kt`](apps/api/src/test/kotlin/com/kliniq/infra/realtime/BookingPublishAfterCommitTest.kt) asserts that a Redis pub-sub message lands only after the surrounding DB transaction commits, so other browser tabs never receive a "new booking" event that ends up being rolled back. [`BookingPubSubTwoInstancesTest.kt`](apps/api/src/test/kotlin/com/kliniq/infra/realtime/BookingPubSubTwoInstancesTest.kt) extends that to a two-instance setup proving the channel works across JVMs.
 - **Auth surface has 60+ integration tests against real Postgres and Redis containers** via Testcontainers + `@ServiceConnection`. JaCoCo line coverage on `com.kliniq.usecase.auth` is ~89%.
-- **Email senders are bean-swappable via `@ConditionalOnProperty`.** [`SmtpEmailSender`](apps/api/src/main/kotlin/com/kliniq/infra/mail/SmtpEmailSender.kt) wires when `app.mail.provider=smtp` (local dev with Mailpit); [`ResendApiEmailSender`](apps/api/src/main/kotlin/com/kliniq/infra/mail/ResendApiEmailSender.kt) wires when `app.mail.provider=resend` (prod). Hetzner blocks outbound SMTP on fresh cloud accounts so prod talks to Resend over HTTPS instead.
+- **Email senders are bean-swappable via `@ConditionalOnProperty`.** [`SmtpEmailSender`](apps/api/src/main/kotlin/com/kliniq/infra/mail/SmtpEmailSender.kt) wires when `app.mail.provider=smtp` (local dev with Mailpit); [`ResendApiEmailSender`](apps/api/src/main/kotlin/com/kliniq/infra/mail/ResendApiEmailSender.kt) wires when `app.mail.provider=resend` (prod). Cloud providers commonly block outbound SMTP on fresh accounts, so prod delivers over HTTPS instead of port 25.
 - **CSP via SvelteKit, not Caddy.** SvelteKit emits a `<meta http-equiv="content-security-policy">` per page with sha256 hashes of its own inline hydration scripts; the corresponding Caddy `Content-Security-Policy` header is deliberately absent so the browser doesn't intersect-down to a policy that invalidates those hashes. See [`apps/web/svelte.config.js`](apps/web/svelte.config.js) and the "Security headers" section in [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
-- **CI → GHCR → Coolify pipeline.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — `api-image` job spins up a Postgres service container, builds the bootJar (running Flyway + jOOQ codegen against it), and pushes the runtime image to GHCR on every merge to main. The Hetzner box's `docker pull` + Coolify Deploy round-trips the image in.
+- **CI → GHCR → deploy pipeline.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — `api-image` job spins up a Postgres service container, builds the bootJar (running Flyway + jOOQ codegen against it), and pushes the runtime image to GHCR on every merge to main. The deploy host pulls that image; for the Reykjavik box the same image is built from source and loaded directly, since it has no JDK for jOOQ codegen.
 - **Error tracking lands at Sentry from both sides.** api uses [`sentry-spring-boot-starter-jakarta`](apps/api/build.gradle.kts) with a logback appender — anything calling `logger.error(..., throwable)` becomes a Sentry event, no per-call instrumentation. web uses [`@sentry/sveltekit`](apps/web/svelte.config.js) wired in [`hooks.client.ts`](apps/web/src/hooks.client.ts) + [`hooks.server.ts`](apps/web/src/hooks.server.ts); source maps upload to Sentry at Docker build time so dashboard stack traces resolve to real `.svelte` / `.ts` files.
 
 ADRs explaining the bigger decisions live in [`docs/DECISIONS.md`](docs/DECISIONS.md).
@@ -153,10 +171,10 @@ pnpm gen:api
 
 ## Deploy your own
 
-See [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for the full Hetzner + Coolify deploy procedure, including:
+See [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for the full deploy and operations procedure, including:
 
 - Provisioning, DNS setup (Cloudflare DNS-only mode for Let's Encrypt to work)
-- Coolify env vars (`SENTRY_DSN`, `PUBLIC_SENTRY_DSN`, `APP_MAIL_RESEND_API_KEY`, `APP_DEMO_SEED`, etc.)
+- Environment variables (`SENTRY_DSN`, `PUBLIC_SENTRY_DSN`, `APP_WEBAUTHN_RP_ID`, `APP_DEMO_SEED`, etc.)
 - Daily pg_dump cron + the IPv6-aware healthcheck quirk
 - Sentry verification, UptimeRobot setup, SSH hardening with `00-kliniq-hardening.conf`
 - Common incidents — "site is down", "GHA built but the new image isn't running", "login succeeded but stuck on /login"
@@ -169,7 +187,7 @@ See [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for the full Hetzner + Coolify deploy p
 - **Tests:** JUnit 5 · Testcontainers (postgres + redis) · `@ServiceConnection` · `webauthn4j-test` virtual authenticator · Vitest · Playwright
 - **Local infra:** Docker Compose · Mailpit · mkcert
 - **CI:** GitHub Actions · gitleaks · commitlint · dependabot
-- **Prod:** Hetzner CPX22 (€10.10/mo, 2 vCPU + 4 GB) · Coolify v4 · Caddy 2 · GHCR · Cloudflare DNS · Resend · Sentry · UptimeRobot
+- **Prod:** self-managed VPS in Reykjavík (2 vCPU + 3.8 GB) · Docker Compose · nginx · Cloudflare (proxy + origin cert) · Sentry
 
 ## Repository tour
 
@@ -181,10 +199,11 @@ See [`docs/RUNBOOK.md`](docs/RUNBOOK.md) for the full Hetzner + Coolify deploy p
 | [`certs/`](certs/) | mkcert-issued local TLS material (gitignored). |
 | [`docs/`](docs/) | Architecture, domain, ADRs, sprint plans, design system, prod runbook. Source of truth — start here. |
 | [`compose.yaml`](compose.yaml) | Local infra: postgres 16, redis 7.4, mailpit. |
-| [`compose.prod.yaml`](compose.prod.yaml) | Prod stack used by Coolify on the Hetzner box: postgres, redis, mailpit, api (image-only), web (built on-host), caddy (inline Caddyfile). |
+| [`compose.izotov.yaml`](compose.izotov.yaml) | Stack as actually deployed: same services minus Caddy, because nginx on the host already owns 80/443. |
+| [`compose.prod.yaml`](compose.prod.yaml) | Reference prod stack with Caddy as ingress: postgres, redis, mailpit, api (image-only), web (built on-host), caddy (inline Caddyfile). |
 | [`lefthook.yml`](lefthook.yml) | Pre-commit (gitleaks + lint) and pre-push (typecheck) hooks. |
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | CI: api build + test + lint + image push to GHCR, web lint + typecheck + unit, gitleaks. |
-| [`scripts/backup-pg.sh`](scripts/backup-pg.sh) | Daily 03:00 UTC `pg_dump` on the Hetzner box, 14-day retention. |
+| [`scripts/backup-pg.sh`](scripts/backup-pg.sh) | Daily 03:00 UTC `pg_dump`, 14-day retention. |
 
 ## Documentation
 

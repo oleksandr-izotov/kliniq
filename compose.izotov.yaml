@@ -1,0 +1,119 @@
+# Kliniq on the Reykjavík box, behind the nginx that already serves izotov.dev.
+#
+# Differs from compose.prod.yaml in one way that matters: no Caddy. Ports 80 and
+# 443 are already taken by nginx, which terminates TLS with the Cloudflare Origin
+# certificate covering *.izotov.dev — so the web container only publishes on
+# 127.0.0.1 and nginx proxies to it. Nothing here is reachable from outside the
+# host except through that proxy.
+#
+# Bring up:   docker compose -f compose.izotov.yaml up -d
+# Logs:       docker compose -f compose.izotov.yaml logs -f api
+# Tear down:  docker compose -f compose.izotov.yaml down
+
+name: kliniq
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kliniq
+      POSTGRES_USER: kliniq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kliniq -d kliniq"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks: [kliniq-net]
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [kliniq-net]
+
+  # Spring Boot's MailHealthIndicator pings the configured SMTP host on
+  # /actuator/health, so the demo needs something listening even though it
+  # sends no real mail. Mailpit swallows everything and keeps health green.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    networks: [kliniq-net]
+
+  api:
+    # Built from source on the Swiss box and loaded here: jOOQ codegen needs a
+    # live Postgres at compile time, which this host has no JDK to run.
+    image: kliniq-api:latest
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      mailpit: { condition: service_started }
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/kliniq
+      SPRING_DATASOURCE_USERNAME: kliniq
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_MAIL_HOST: mailpit
+      SPRING_MAIL_PORT: 1025
+      APP_MAIL_PROVIDER: smtp
+      APP_MAIL_FROM: no-reply@kliniq.izotov.dev
+      APP_WEB_BASE_URL: https://kliniq.izotov.dev
+      # Passkeys are bound to the origin at the protocol level: rp-id must be a
+      # registrable suffix of the origin, and the origin must match the address
+      # bar exactly. Leave these at their localhost defaults and every ceremony
+      # fails with an opaque browser error.
+      APP_WEBAUTHN_RP_ID: kliniq.izotov.dev
+      APP_WEBAUTHN_RP_NAME: Kliniq
+      APP_WEBAUTHN_ORIGINS_0: https://kliniq.izotov.dev
+      # Seeds 3 operating rooms, 4 surgeons and ~10 bookings on first start.
+      # Idempotent: a restart with rooms already present is a no-op.
+      APP_DEMO_SEED: "true"
+      # This box has 2 vCPU and 3.8 GB shared with the site and the VPN hub;
+      # an unbounded JVM heap would balloon under load.
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:+UseSerialGC"
+    # nginx routes /api, /actuator and the docs here directly — the browser
+    # talks to the JVM, not through SvelteKit.
+    ports:
+      - "127.0.0.1:3200:8080"
+    networks: [kliniq-net]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_started }
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      BACKEND_URL: http://api:8080
+    # Only nginx talks to this; the port is not reachable from the internet.
+    ports:
+      - "127.0.0.1:3100:3000"
+    networks: [kliniq-net]
+
+volumes:
+  pg-data:
+  redis-data:
+
+networks:
+  kliniq-net:

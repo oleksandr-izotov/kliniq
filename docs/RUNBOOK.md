@@ -1,6 +1,71 @@
 # Kliniq prod runbook
 
-Operational reference for the Hetzner CPX22 box at `$KLINIQ_OLD_HOST` that hosts the live Kliniq deploy at `https://kliniq.izotov.dev`. Stable enough to be useful when something breaks at 2 AM; living document otherwise.
+Operational reference for the live deploy at `https://kliniq.izotov.dev`.
+Stable enough to be useful when something breaks at 2 AM; living document
+otherwise.
+
+> **Where it runs (since 2026-09-09).** A self-managed VPS in Reykjavík, shared
+> with the owner's personal site and a WireGuard hub. Docker Compose brings up
+> postgres, redis, mailpit, api and web; the host's nginx is the ingress and
+> terminates TLS with a Cloudflare Origin certificate for `*.izotov.dev`.
+> There is no Coolify and no Caddy on this host — nginx already owns 80/443.
+>
+> Sections below that mention Coolify, Caddy or the Hetzner box describe the
+> **previous** deployment (V1.0, May–September 2026). They are kept because the
+> procedures — backups, incident triage, promoting a user to admin — carry over
+> unchanged; only the ingress and orchestration differ.
+
+## Current deployment
+
+**Host:** `$KLINIQ_HOST` (Reykjavík) · 2 vCPU · 3.8 GB RAM
+**Project directory:** `/srv/kliniq` — sources, `compose.izotov.yaml`, `.env`
+**Compose project:** `kliniq` (containers `kliniq-api-1`, `kliniq-web-1`, …)
+
+```bash
+ssh root@$KLINIQ_HOST
+
+cd /srv/kliniq
+docker compose -f compose.izotov.yaml ps         # state
+docker compose -f compose.izotov.yaml logs -f api
+docker compose -f compose.izotov.yaml restart api
+```
+
+**Ports.** Nothing from this stack is exposed to the internet directly. The web
+container publishes on `127.0.0.1:3100`, the api on `127.0.0.1:3200`, and nginx
+proxies to both. The firewall opens 80/443 only to Cloudflare's ranges.
+
+**Rebuilding the api image.** jOOQ generates code from a live database at compile
+time, and this host has no JDK. Build on a machine that has one, then load:
+
+```bash
+# on the build machine, in the repo root
+docker compose -f compose.yaml up -d postgres          # codegen database on :55432
+(cd apps/api && ./gradlew flywayMigrate generateJooq bootJar)
+docker build -t kliniq-api:latest -f apps/api/Dockerfile apps/api/
+docker save kliniq-api:latest | gzip -1 | ssh root@$KLINIQ_HOST 'gunzip | docker load'
+
+# on the host
+cd /srv/kliniq && docker compose -f compose.izotov.yaml up -d api
+```
+
+**Rebuilding the web image** happens on the host — it needs no JDK:
+
+```bash
+cd /srv/kliniq && docker compose -f compose.izotov.yaml up -d --build web
+```
+
+**Passkeys are origin-bound.** `APP_WEBAUTHN_RP_ID` and `APP_WEBAUTHN_ORIGINS_0`
+in `compose.izotov.yaml` must match the address bar exactly. Change the domain
+and every passkey ceremony fails with an opaque browser error, while password
+login keeps working — which makes it an easy fault to misdiagnose.
+
+**Demo data.** `APP_DEMO_SEED=true` seeds 3 operating rooms, 4 surgeons and ~10
+bookings on first start, then does nothing on later starts. The seeder lays
+bookings out from the day after seeding, so a freshly seeded demo shows an empty
+board on day one; `scripts/shift-demo-day.sql` moves the first seeded day onto
+today.
+
+## Previous deployment (Hetzner + Coolify)
 
 ## Common access
 
