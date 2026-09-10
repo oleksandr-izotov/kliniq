@@ -34,18 +34,24 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
-    # A framework major is a migration, not a bump: Spring Boot 4 moves to
-    # Spring Framework 7, and the Kotlin plugins only work when every one of
-    # them sits on the same version as `kotlin("jvm")`. Dependabot cannot make
-    # either change coherently -- it just opens a red PR every cycle. Those
-    # upgrades are done deliberately, by hand.
+    # On the JVM a major is a migration, not a bump -- Spring Boot 4 moves to
+    # Spring Framework 7, springdoc 3 rewrites its starters, Gradle 9 drops
+    # features this build still uses. Dependabot cannot make any of those
+    # coherently; left alone it opens the same red PRs every cycle until they
+    # are indistinguishable from noise. Majors are reviewed and taken by hand.
+    #
+    # The Kotlin plugins are stricter still: `jvm` and `plugin.spring` must sit
+    # on exactly the same version as each other, and Dependabot proposes them
+    # one at a time, so even a minor has to be done as one deliberate change.
     ignore:
-      - dependency-name: "org.springframework.boot"
+      - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-      - dependency-name: "org.jetbrains.kotlin*"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "jvm"
+        update-types: ["version-update:semver-minor"]
       - dependency-name: "plugin.spring"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "org.jetbrains.kotlin*"
+        update-types: ["version-update:semver-minor"]
     groups:
       spring:
         patterns: ["org.springframework*", "io.spring*"]
