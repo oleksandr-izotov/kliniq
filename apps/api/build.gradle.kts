@@ -79,7 +79,7 @@ dependencies {
     // Spring Boot's default coloured console output (logback-spring.xml
     // toggles between the two via <springProfile>). Used by Coolify /
     // any aggregator that consumes structured stdout.
-    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+    implementation("net.logstash.logback:logstash-logback-encoder:9.0")
 
     // Sentry error tracking. The -jakarta starter wires itself into Spring
     // Boot 3.x auto-configuration (DSN, environment, release pulled from
