@@ -112,7 +112,7 @@ dependencies {
     implementation("org.springframework.session:spring-session-data-redis")
 
     // UUID v7 — time-ordered, used everywhere as primary key
-    implementation("com.github.f4b6a3:uuid-creator:6.0.0")
+    implementation("com.github.f4b6a3:uuid-creator:6.1.1")
 
     // jOOQ codegen needs the JDBC driver on its own classpath at build time.
     jooqGenerator("org.postgresql:postgresql")
