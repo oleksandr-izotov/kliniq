@@ -8,7 +8,7 @@ import org.jooq.meta.jaxb.Logging
 buildscript {
     dependencies {
         classpath("org.postgresql:postgresql:42.7.9")
-        classpath("org.flywaydb:flyway-database-postgresql:10.20.1")
+        classpath("org.flywaydb:flyway-database-postgresql:13.5.0")
     }
 }
 
@@ -22,7 +22,7 @@ plugins {
     // Flyway and jOOQ work as a pair: Flyway applies migrations against a
     // running Postgres, jOOQ then introspects that schema to generate
     // type-safe Kotlin code.
-    id("org.flywaydb.flyway") version "10.20.1"
+    id("org.flywaydb.flyway") version "13.5.0"
     id("nu.studer.jooq") version "9.0"
     jacoco
 }
