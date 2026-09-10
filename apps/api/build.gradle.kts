@@ -89,8 +89,8 @@ dependencies {
     //
     // No DSN set in non-prod profiles → SDK no-ops on init (documented
     // behavior) so local dev + tests don't ship phantom events.
-    implementation("io.sentry:sentry-spring-boot-starter-jakarta:7.20.1")
-    implementation("io.sentry:sentry-logback:7.20.1")
+    implementation("io.sentry:sentry-spring-boot-starter-jakarta:8.55.0")
+    implementation("io.sentry:sentry-logback:8.55.0")
 
     // DevTools restarts the running app when build/classes/ changes.
     // Pair with `./gradlew --continuous build` in another terminal (or
