@@ -85,11 +85,11 @@ services:
     #
     # Local prod-image testing flow (the one the file used to support):
     #   1. ./gradlew -p apps/api :bootJar
-    #   2. docker build -t ghcr.io/oleksandr-izotov/kliniq-api:latest -f apps/api/Dockerfile apps/api/
+    #   2. docker build -t ghcr.io/oleksandr-izotov/kliniq/api:latest -f apps/api/Dockerfile apps/api/
     #   3. docker compose -f compose.prod.yaml up
     # The `up` finds the locally-tagged image and skips the pull, same
     # net effect as Coolify pulling from GHCR.
-    image: ghcr.io/oleksandr-izotov/kliniq-api:latest
+    image: ghcr.io/oleksandr-izotov/kliniq/api:latest
     depends_on:
       postgres:
         condition: service_healthy

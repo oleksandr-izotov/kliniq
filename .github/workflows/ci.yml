@@ -141,14 +141,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The repo path component of the GHCR image name MUST be lowercase;
-      # `github.repository` already is for our repo, but normalising here
-      # protects future contributors with mixed-case usernames.
+      # Nested under the repository path (<owner>/<repo>/api) rather than
+      # alongside it (<owner>/<repo>-api): GHCR links a package to whichever
+      # repository first published it, and only that repository's
+      # GITHUB_TOKEN may write to it afterwards. Deriving the name from
+      # $GITHUB_REPOSITORY keeps a fork publishing to its own package instead
+      # of failing on a name someone else already owns.
+      #
+      # The repo path component MUST be lowercase; `github.repository` already
+      # is for this repo, but normalising here protects contributors with
+      # mixed-case usernames.
       - name: Resolve image name
         id: img
         run: |
           repo_lc="${GITHUB_REPOSITORY,,}"
-          echo "image=ghcr.io/${repo_lc}-api" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${repo_lc}/api" >> "$GITHUB_OUTPUT"
 
       - name: Build & push image
         uses: docker/build-push-action@v5

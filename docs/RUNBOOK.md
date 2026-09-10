@@ -234,7 +234,7 @@ Run path is the Resend HTTPS API, not SMTP. Hetzner blocks outbound SMTP so don'
 Coolify caches `:latest` by tag and doesn't always pull on every deploy. Manual force-pull then redeploy:
 
 ```bash
-docker pull ghcr.io/oleksandr-izotov/kliniq-api:latest
+docker pull ghcr.io/oleksandr-izotov/kliniq/api:latest
 ```
 
 Then click Deploy in Coolify.
