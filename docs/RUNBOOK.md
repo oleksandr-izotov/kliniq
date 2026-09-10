@@ -73,6 +73,21 @@ bookings out from the day after seeding, so a freshly seeded demo shows an empty
 board on day one; `scripts/shift-demo-day.sql` moves the first seeded day onto
 today.
 
+**Nightly demo reset.** The demo publishes its own credentials, so any visitor
+can sign in as a manager and cancel every booking on the board — and the seeder,
+being idempotent, will never put them back. `scripts/reset-demo.sh` drops the
+schema, lets Flyway and the seeder rebuild it, flushes the Redis sessions and
+re-runs the day shift. It refuses to run against a container without
+`APP_DEMO_SEED=true`, so it cannot wipe a real deployment, and it takes its own
+dump first. About 20 seconds of API downtime.
+
+```bash
+0 4 * * * /srv/kliniq/scripts/reset-demo.sh >> /var/log/kliniq-reset.log 2>&1
+```
+
+An hour after the nightly backup, so the pre-reset state is still recoverable
+from the 03:00 dump.
+
 ## Previous deployment (Hetzner + Coolify)
 
 ## Common access
