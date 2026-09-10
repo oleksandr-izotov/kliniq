@@ -687,11 +687,7 @@ export interface components {
 			readonly isSurgeon: boolean;
 			/** @enum {string} */
 			readonly specialty?:
-				| 'CARDIOLOGY'
-				| 'ORTHOPEDICS'
-				| 'GENERAL'
-				| 'NEUROSURGERY'
-				| 'OPHTHALMOLOGY';
+				'CARDIOLOGY' | 'ORTHOPEDICS' | 'GENERAL' | 'NEUROSURGERY' | 'OPHTHALMOLOGY';
 		};
 		readonly UpdateOperatingRoomRequest: {
 			readonly name: string;
@@ -737,11 +733,7 @@ export interface components {
 			readonly isSurgeon: boolean;
 			/** @enum {string} */
 			readonly specialty?:
-				| 'CARDIOLOGY'
-				| 'ORTHOPEDICS'
-				| 'GENERAL'
-				| 'NEUROSURGERY'
-				| 'OPHTHALMOLOGY';
+				'CARDIOLOGY' | 'ORTHOPEDICS' | 'GENERAL' | 'NEUROSURGERY' | 'OPHTHALMOLOGY';
 			/** @enum {string} */
 			readonly status: 'ACTIVE' | 'DISABLED';
 			/** Format: date-time */
@@ -755,11 +747,7 @@ export interface components {
 			readonly isSurgeon: boolean;
 			/** @enum {string} */
 			readonly specialty:
-				| 'CARDIOLOGY'
-				| 'ORTHOPEDICS'
-				| 'GENERAL'
-				| 'NEUROSURGERY'
-				| 'OPHTHALMOLOGY';
+				'CARDIOLOGY' | 'ORTHOPEDICS' | 'GENERAL' | 'NEUROSURGERY' | 'OPHTHALMOLOGY';
 			/** @enum {string} */
 			readonly status: 'ACTIVE' | 'DISABLED';
 		};
@@ -769,11 +757,7 @@ export interface components {
 			readonly displayName: string;
 			/** @enum {string} */
 			readonly specialty:
-				| 'CARDIOLOGY'
-				| 'ORTHOPEDICS'
-				| 'GENERAL'
-				| 'NEUROSURGERY'
-				| 'OPHTHALMOLOGY';
+				'CARDIOLOGY' | 'ORTHOPEDICS' | 'GENERAL' | 'NEUROSURGERY' | 'OPHTHALMOLOGY';
 		};
 		readonly BookingDto: {
 			/** Format: uuid */
@@ -861,11 +845,7 @@ export interface components {
 			readonly isSurgeon: boolean;
 			/** @enum {string} */
 			readonly specialty?:
-				| 'CARDIOLOGY'
-				| 'ORTHOPEDICS'
-				| 'GENERAL'
-				| 'NEUROSURGERY'
-				| 'OPHTHALMOLOGY';
+				'CARDIOLOGY' | 'ORTHOPEDICS' | 'GENERAL' | 'NEUROSURGERY' | 'OPHTHALMOLOGY';
 			/** @enum {string} */
 			readonly status: 'ACTIVE' | 'DISABLED';
 			/** Format: date-time */
@@ -891,11 +871,7 @@ export interface components {
 			readonly isSurgeon: boolean;
 			/** @enum {string} */
 			readonly specialty?:
-				| 'CARDIOLOGY'
-				| 'ORTHOPEDICS'
-				| 'GENERAL'
-				| 'NEUROSURGERY'
-				| 'OPHTHALMOLOGY';
+				'CARDIOLOGY' | 'ORTHOPEDICS' | 'GENERAL' | 'NEUROSURGERY' | 'OPHTHALMOLOGY';
 			/** Format: uuid */
 			readonly issuedById: string;
 			/** Format: date-time */
