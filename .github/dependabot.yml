@@ -4,7 +4,7 @@ updates:
   - package-ecosystem: npm
     directory: "/"
     schedule:
-      interval: weekly
+      interval: monthly
       day: monday
       time: "06:00"
       timezone: Europe/Berlin
@@ -27,13 +27,25 @@ updates:
   - package-ecosystem: gradle
     directory: "/apps/api"
     schedule:
-      interval: weekly
+      interval: monthly
       day: monday
       time: "06:00"
       timezone: Europe/Berlin
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
+    # A framework major is a migration, not a bump: Spring Boot 4 moves to
+    # Spring Framework 7, and the Kotlin plugins only work when every one of
+    # them sits on the same version as `kotlin("jvm")`. Dependabot cannot make
+    # either change coherently -- it just opens a red PR every cycle. Those
+    # upgrades are done deliberately, by hand.
+    ignore:
+      - dependency-name: "org.springframework.boot"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.jetbrains.kotlin*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "plugin.spring"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       spring:
         patterns: ["org.springframework*", "io.spring*"]
