@@ -14,7 +14,7 @@ buildscript {
 
 plugins {
     kotlin("jvm") version "2.1.0"
-    kotlin("plugin.spring") version "2.1.0"
+    kotlin("plugin.spring") version "2.4.10"
     id("org.springframework.boot") version "3.5.10"
     id("io.spring.dependency-management") version "1.1.7"
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
