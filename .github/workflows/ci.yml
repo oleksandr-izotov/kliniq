@@ -51,7 +51,7 @@ jobs:
           java-version: 21
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # Codegen runs first: applies V1+V2 to the postgres service via Flyway
       # and writes Kotlin sources under build/generated-sources/jooq. Doing
@@ -122,7 +122,7 @@ jobs:
           java-version: 21
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # bootJar pulls in flywayMigrate → generateJooq → compileKotlin
       # transitively, so the single task is enough to produce the runnable
