@@ -182,7 +182,7 @@ jobs:
 
       # pnpm/action-setup reads the version from packageManager field in
       # package.json — no need to specify it here.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v4
         with:
@@ -233,7 +233,7 @@ jobs:
           fetch-depth: 0
       # pnpm/action-setup reads the version from packageManager field in
       # package.json — no need to specify it here.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: 20
