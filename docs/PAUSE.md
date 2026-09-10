@@ -23,7 +23,7 @@ This file is the single entry point for "I'm back, what now?". Read it first, th
 | 61–63 | Sprint plan + mobile-responsive every screen | ✅ done |
 | 64 | Drag-drop reschedule in /schedule | ✅ done |
 | 65 | Branded empty-state illustrations (5 screens) | ✅ done, deployed |
-| **66** | **Feedback round** — email demo link to 2–3 humans, capture quotes in `docs/FEEDBACK_V1_1.md` | ⬜ **needs the user** (real reviewers) |
+| **66** | **Feedback round** — email demo link to 2–3 humans, capture quotes in `docs/FEEDBACK_V1_1.md` | ⬜ **blocked on real reviewers** |
 | **67** | Apply top-3 feedback fixes | ⬜ depends on 66 |
 | **68** | Web image → built in GHA & pushed to GHCR (stop building it on the deploy host); move `SENTRY_AUTH_TOKEN` into a GHA secret | ⬜ tech debt, code-only |
 | **69** | Branch coverage push: `com.kliniq.usecase.**` ≥ 75 %, `BookingStatus.canTransitionTo` 100 % (currently ~60.4 % overall) | ⬜ code-only |

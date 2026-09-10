@@ -17,7 +17,15 @@ otherwise.
 
 ## Current deployment
 
-**Host:** `$KLINIQ_HOST` (Reykjavík) · 2 vCPU · 3.8 GB RAM
+**Host:** `$KLINIQ_HOST` (Reykjavík) · 2 vCPU · 3.8 GB RAM — the address is
+deliberately not in this repository. The site sits behind Cloudflare, and
+publishing the origin would let anyone reach it directly, past the edge. Export
+it in your shell before running the commands below:
+
+```bash
+export KLINIQ_HOST=<origin address>
+```
+
 **Project directory:** `/srv/kliniq` — sources, `compose.izotov.yaml`, `.env`
 **Compose project:** `kliniq` (containers `kliniq-api-1`, `kliniq-web-1`, …)
 

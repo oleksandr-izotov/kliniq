@@ -86,7 +86,7 @@ services:
       # Seeds 3 operating rooms, 4 surgeons and ~10 bookings on first start.
       # Idempotent: a restart with rooms already present is a no-op.
       APP_DEMO_SEED: "true"
-      # This box has 2 vCPU and 3.8 GB shared with the site and the VPN hub;
+      # This box has 2 vCPU and 3.8 GB, shared with other services;
       # an unbounded JVM heap would balloon under load.
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:+UseSerialGC"
     # nginx routes /api, /actuator and the docs here directly — the browser

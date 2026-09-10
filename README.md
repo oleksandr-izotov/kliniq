@@ -30,7 +30,7 @@ Sign in with any of the demo surgeon accounts:
 
 The schedule is pre-seeded with 3 operating rooms and ~10 bookings spread across the next two weeks. The seed is opt-in via the `APP_DEMO_SEED=true` env var so a real clinical deploy never receives it — see [`DemoDataSeeder.kt`](apps/api/src/main/kotlin/com/kliniq/infra/demo/DemoDataSeeder.kt).
 
-**Status:** V1.1 — Sprint 5 (backups, Sentry, UptimeRobot, SSH/CSP hardening, demo data, onboarding wizard, README polish) in flight.
+**Status:** V1.1 shipped and live. Sprint 6 (mobile layouts, drag-drop reschedule, branded empty states) is done through day 65; what comes next is in [`docs/PLAN_NEXT.md`](docs/PLAN_NEXT.md).
 **Author:** Oleksandr Izotov ([@oleksandr-izotov](https://github.com/oleksandr-izotov))
 **License:** MIT
 
