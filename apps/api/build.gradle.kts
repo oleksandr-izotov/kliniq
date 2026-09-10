@@ -73,7 +73,7 @@ dependencies {
     // Auto-discovers controllers + DTOs; the SPA generates its types from
     // the served spec via `pnpm gen:api`, retiring the hand-mirrored DTOs
     // flagged in the Sprint 1 retro.
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1")
 
     // JSON-per-line logging in the prod profile. The dev profile keeps
     // Spring Boot's default coloured console output (logback-spring.xml
