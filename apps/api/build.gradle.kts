@@ -7,7 +7,7 @@ import org.jooq.meta.jaxb.Logging
 // scope, in addition to the runtime deps below.
 buildscript {
     dependencies {
-        classpath("org.postgresql:postgresql:42.7.9")
+        classpath("org.postgresql:postgresql:42.7.14")
         classpath("org.flywaydb:flyway-database-postgresql:13.12.1")
     }
 }
