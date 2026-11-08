@@ -22,7 +22,7 @@
     "dev:all": "pnpm infra:up && wait-on tcp:55432 tcp:6379 tcp:8025 && concurrently --names api,api-watch,web --prefix-colors blue,gray,green --kill-others-on-fail \"pnpm dev:api\" \"pnpm dev:api:watch\" \"pnpm dev:web\""
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.0.0",
+    "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^19.0.0",
     "concurrently": "^10.0.6",
     "lefthook": "^1.7.0",
