@@ -60,6 +60,12 @@ updates:
         update-types: ["version-update:semver-minor"]
       - dependency-name: "org.jetbrains.kotlin*"
         update-types: ["version-update:semver-minor"]
+      # From 0.30 webauthn4j needs a newer jackson-annotations (JsonApplyView)
+      # than Spring Boot 3.5 manages, and the passkey tests fail with
+      # NoClassDefFoundError. In 0.x a minor is a breaking release: take it
+      # together with the Spring Boot upgrade, patches are fine meanwhile.
+      - dependency-name: "com.webauthn4j*"
+        update-types: ["version-update:semver-minor"]
     groups:
       spring:
         patterns: ["org.springframework*", "io.spring*"]
@@ -67,10 +73,8 @@ updates:
         patterns: ["org.jetbrains.kotlin*", "kotlin*"]
       flyway:
         patterns: ["org.flywaydb*"]
-      # webauthn4j-core and webauthn4j-test must stay on the same release:
-      # bumped alone, the test artefact references classes the older core
-      # does not have (ClassNotFoundException in the passkey tests). This group
-      # sits above `testing` so webauthn4j-test lands here and not there.
+      # webauthn4j-core and webauthn4j-test move together; this group sits
+      # above `testing` so webauthn4j-test lands here and not there.
       webauthn4j:
         patterns: ["com.webauthn4j*"]
       testing:
