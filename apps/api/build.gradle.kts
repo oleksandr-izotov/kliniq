@@ -129,7 +129,7 @@ dependencies {
 
     // Emulated authenticator + ClientPlatform helpers for full WebAuthn
     // ceremonies in integration tests, no browser required.
-    testImplementation("com.webauthn4j:webauthn4j-test:0.29.1.RELEASE")
+    testImplementation("com.webauthn4j:webauthn4j-test:0.32.0.RELEASE")
 }
 
 kotlin {
