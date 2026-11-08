@@ -17,7 +17,7 @@ plugins {
     kotlin("plugin.spring") version "2.1.21"
     id("org.springframework.boot") version "3.5.16"
     id("io.spring.dependency-management") version "1.1.7"
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
+    id("org.jlleitschuh.gradle.ktlint") version "12.3.0"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
     // Flyway and jOOQ work as a pair: Flyway applies migrations against a
     // running Postgres, jOOQ then introspects that schema to generate
