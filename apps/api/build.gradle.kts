@@ -62,7 +62,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
 
     // Argon2id password hashing
-    implementation("de.mkammerer:argon2-jvm:2.11")
+    implementation("de.mkammerer:argon2-jvm:2.12")
 
     // WebAuthn / passkeys. webauthn4j-core gives us the registration and
     // authentication ceremony validators; we wire the cookie-session flow
