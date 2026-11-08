@@ -67,7 +67,7 @@ dependencies {
     // WebAuthn / passkeys. webauthn4j-core gives us the registration and
     // authentication ceremony validators; we wire the cookie-session flow
     // around it ourselves rather than pulling in webauthn4j-spring-security.
-    implementation("com.webauthn4j:webauthn4j-core:0.29.1.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.32.0.RELEASE")
 
     // OpenAPI 3.1 emit at /v3/api-docs + Swagger UI at /swagger-ui.html.
     // Auto-discovers controllers + DTOs; the SPA generates its types from
