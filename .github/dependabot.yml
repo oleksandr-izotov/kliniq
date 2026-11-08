@@ -11,6 +11,14 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
+    # A SvelteKit major is a migration (adapter API, build tooling), not a
+    # bump: grouped with the patch-level svelte updates it turns the whole
+    # group red and blocks the harmless part. Majors are taken by hand.
+    ignore:
+      - dependency-name: "@sveltejs/kit"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@sveltejs/adapter-*"
+        update-types: ["version-update:semver-major"]
     groups:
       svelte:
         patterns: ["@sveltejs/*", "svelte", "svelte-*"]
@@ -59,6 +67,12 @@ updates:
         patterns: ["org.jetbrains.kotlin*", "kotlin*"]
       flyway:
         patterns: ["org.flywaydb*"]
+      # webauthn4j-core and webauthn4j-test must stay on the same release:
+      # bumped alone, the test artefact references classes the older core
+      # does not have (ClassNotFoundException in the passkey tests). This group
+      # sits above `testing` so webauthn4j-test lands here and not there.
+      webauthn4j:
+        patterns: ["com.webauthn4j*"]
       testing:
         patterns: ["org.junit*", "org.testcontainers*", "*test*"]
 
