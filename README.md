@@ -230,7 +230,7 @@ Executable sprint plans:
 
 ## Working principles
 
-- **Every line of code is mine.** No copy-paste from other projects, no matter how similar.
+- **AI-first, human-owned.** Requirements, architecture (see the ADRs) and acceptance criteria are mine; coding agents write most of the code; every change goes through tests and my review before it lands on `main`. No copy-paste from other projects.
 - **Local-first.** V1 ran on a laptop before touching cloud infra.
 - **Secrets never in git.** `.env.example` only. Pre-commit hook with gitleaks blocks accidents.
 - **Tests on critical paths from day one** — auth, booking, realtime. Not "we'll add tests later."
@@ -245,4 +245,4 @@ The docs in `docs/` plus the README are designed to be self-contained. To resume
 2. The current sprint file (`docs/sprints/SPRINT_*.md`)
 3. The relevant ADRs (`docs/DECISIONS.md`)
 4. The latest commits on `main` so it sees what's actually built vs planned
-10. [`docs/RUNBOOK.md`](docs/RUNBOOK.md) when anything touches prod
+5. [`docs/RUNBOOK.md`](docs/RUNBOOK.md) when anything touches prod
